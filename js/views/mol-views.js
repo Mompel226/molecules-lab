@@ -140,6 +140,16 @@
       /* each fatty acid is joined by its acid end at one of glycerol's three places */
       ys.forEach(function (yy) { D.ball(c, x + gw * .5, yy, 2.9 * s, C.O); });
     }
+    /* a wax (IB B1.1.8): one fatty acid joined by an oxygen to one long alcohol, with no glycerol. The two straight chains lie very close to the
+       chains beside them, which is why a wax remains solid at higher temperatures than most fats */
+    var WAX = [];
+    for (var wr = 0; wr < 13; wr++) for (var wq = 0; wq < 2; wq++) WAX.push([106 + wq * 258 + (wr % 2 ? 12 : 0), 36 + wr * 27]);
+    function waxMol(c, x, y, wob) {
+      var a = Math.sin(amb * 1.1 + x * .03 + y * .05) * wob;
+      D.tail(c, D.tailPts(x, y, Math.PI + a, 15, 6.6, 0), 2.6);
+      D.tail(c, D.tailPts(x, y, a, 27, 6.6, 0), 2.6);
+      D.ball(c, x, y, 3.8, C.O);
+    }
     var scene = {
       W: W, H: H,
       tick: function (dt) { amb += dt; if (kAnim < 1) kAnim = Math.min(1, kAnim + dt / .7); },
@@ -157,6 +167,9 @@
             c.moveTo(434, H / 2 - 88); c.lineTo(444, H / 2 - 88); c.lineTo(444, H / 2 + 88); c.lineTo(434, H / 2 + 88); c.stroke();
           } else if (mode === 'fat') {
             for (var r = 0; r < 5; r++) for (var q = 0; q < 4; q++) eMol(c, 38 + q * 122 + (r % 2 ? 34 : 0), 60 + r * 70, 1, false, .008);
+          } else if (mode === 'wax') {
+            WAX.forEach(function (q) { waxMol(c, q[0], q[1], .005); });
+            S.drawBox(c, { x: WAX[0][0] - 94, y: WAX[0][1] - 13, w: 252, h: 26 }, a);
           } else {
             /* an oil: the bent chains cannot pack, so the molecules lie apart and move past each other */
             var SP = [[92, 92, .3], [272, 75, -.5], [452, 102, 2.7], [120, 259, -2.6], [292, 220, 1.1], [456, 291, -.6], [214, 334, .15]];
@@ -171,21 +184,24 @@
       },
       labels: function () {
         if (mode === 'one') return [{ id: 'g', text: 'glycerol', x: 150, y: H / 2 - 92, side: 'T' }, { id: 'f', text: 'three fatty acids', x: 444, y: H / 2 - 88, side: 'T' }];
+        if (mode === 'wax') return [{ id: 'w', text: 'one wax molecule', x: WAX[0][0] + 32, y: WAX[0][1] - 13, side: 'T' }];
         return [];
       },
-      read: function (pill) { pill('s', mode === 'one' ? 'one glycerol + three fatty acids' : mode === 'fat' ? 'solid at room temperature' : 'liquid at room temperature'); }
+      read: function (pill) { pill('s', mode === 'one' ? 'one glycerol + three fatty acids' : mode === 'fat' ? 'solid at room temperature' : mode === 'wax' ? 'solid at higher temperatures than most fats' : 'liquid at room temperature'); }
     };
     var V = MV({
       scene: scene, aria: 'One fat molecule made of glycerol and three fatty acids; many molecules of a fat packed closely; many molecules of an oil moving past each other.',
-      barLabel: 'What to show', buttons: [['one', 'One molecule'], ['fat', 'A fat'], ['oil', 'An oil']], read: [['s', 'Shown:']],
-      key: { all: [['glycerol', 'glycerol'], ['fatty', 'fatty acid']], sets: [['glycerol', 'fatty acid']], now: function () { return ['glycerol', 'fatty acid']; } },
+      barLabel: 'What to show', buttons: [['one', 'One molecule'], ['fat', 'A fat'], ['oil', 'An oil'], ['wax', 'A wax (IB)', 'memv__btn--ext']], read: [['s', 'Shown:']],
+      key: { all: [['glycerol', 'glycerol'], ['fatty', 'fatty acid'], ['fatty', 'long chain of a wax molecule'], ['atO', 'where the two long chains join']],
+             sets: [['glycerol', 'fatty acid'], ['long chain of a wax molecule', 'where the two long chains join']],
+             now: function () { return mode === 'wax' ? ['long chain of a wax molecule', 'where the two long chains join'] : ['glycerol', 'fatty acid']; } },
       onButton: function (id) { set(id); ctx.pick(id, { stay: true }); }
     });
     function set(id) { if (id !== mode) kAnim = V.isStill() ? 1 : 0; mode = id; V.press(id); V.names(); V.paint(); }
     return {
-      el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); V.press(mode); }, stop: V.stop, say: 'Press to compare a fat and an oil',
+      el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); V.press(mode); }, stop: V.stop, say: 'Press to compare a fat, an oil and a wax',
       credit: 'Drawn for this lab.',
-      focus: function (part) { if (part === 'one' || part === 'fat' || part === 'oil') set(part); }
+      focus: function (part) { if (part === 'one' || part === 'fat' || part === 'oil' || part === 'wax') set(part); }
     };
   });
 
@@ -266,7 +282,12 @@
       onButton: function (id) { set(id); ctx.pick(id, { stay: true }); }
     });
     dragTurn(V, function (dx) { turn += dx; });
-    function set(id) { mode = id; target = id === 'helix' ? 1 : 0; if (V.isStill()) tw = target; V.press(id); V.names(); V.paint(); }
+    function set(id) {
+      mode = id; target = id === 'helix' ? 1 : 0; if (V.isStill()) tw = target;
+      /* only the coiled helix turns: the flat ladder does not promise a drag */
+      var hint = V.el.querySelector('.memv__hint'); if (hint) hint.hidden = id !== 'helix';
+      V.press(id); V.names(); V.paint();
+    }
     return {
       el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); V.press(mode); }, stop: V.stop, say: 'Drag to turn the helix',
       credit: 'Drawn for this lab. The bases keep the colours of the Inheritance Lab.',

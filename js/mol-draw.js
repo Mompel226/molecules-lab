@@ -190,34 +190,75 @@
     var x = x0 * cy + p[2] * sy, z = -x0 * sy + p[2] * cy, y = y0 * cp - z * sp, zz = y0 * sp + z * cp;
     return [x, y, zz];
   }
-  /* draw a model at (cx, cy), s px to the ångström. o: { yaw, pitch, only: 'C'|'H'|'O'|'N' lights one element, alpha } */
-  function model(c, m, cx, cy, s, o) {
-    o = o || {};
-    var P = m.atoms.map(function (a) { return turn(a.p, o.yaw || 0, o.pitch || 0, o.roll || 0); }), items = [], al = o.alpha == null ? 1 : o.alpha;
-    m.bonds.forEach(function (b) { items.push({ z: (P[b[0]][2] + P[b[1]][2]) / 2 - .01, b: b }); });
+  /* draw a model at (cx, cy), s px to the ångström. o: { yaw, pitch, roll, only: 'C'|'H'|'O'|'N' lights one element, alpha }
+     True depth (Daniel, 23 Nov 2026: the sticks jumped from in front to behind as the model turned). A stick runs from the surface of one atom to
+     the surface of the other, in short pieces, and every piece and every atom is drawn in order of its own depth: so a stick passes in front of or
+     behind an atom exactly when it really does. Everything is opaque, also when dimmed, so nothing behind shows through. A double bond is two sticks
+     fixed in the plane of its atoms, so they turn with the molecule. A lit element lights its atoms and its own half of each stick. */
+  var STICK = ['#5F6E82', '#AEBBCB'], NIGHT = '#132A40', TINT = {};
+  function shade(hex, k) { k = Math.round(k * 32) / 32; var id = hex + '|' + k; return TINT[id] || (TINT[id] = mixHex(hex, NIGHT, k)); }
+  function bondSide(m, b) {
+    var key = b[0] + '-' + b[1]; m.side = m.side || {};
+    if (m.side[key]) return m.side[key];
+    var a = m.atoms[b[0]].p, u = unit(sub(m.atoms[b[1]].p, a)), next = null;
+    m.bonds.forEach(function (x) { if (next || x === b) return; var j = x[0] === b[0] ? x[1] : x[1] === b[0] ? x[0] : -1; if (j >= 0) next = m.atoms[j].p; });
+    var v = next ? sub(next, a) : [0, 0, 1], dot = v[0] * u[0] + v[1] * u[1] + v[2] * u[2];
+    return (m.side[key] = unit(sub(v, mul(u, dot))));
+  }
+  function paintModel(c, m, cx, cy, s, o) {
+    var yaw = o.yaw || 0, pitch = o.pitch || 0, roll = o.roll || 0, P = m.atoms.map(function (a) { return turn(a.p, yaw, pitch, roll); }), items = [];
+    var zLo = 1e9, zHi = -1e9; P.forEach(function (p) { zLo = Math.min(zLo, p[2]); zHi = Math.max(zHi, p[2]); });
+    /* what is farther away is a little darker, so the eye reads which part is in front */
+    function fog(z, lit) { var f = .3 * (zHi - z) / Math.max(.01, zHi - zLo); return lit ? f : 1 - (1 - f) * .24; }
+    m.bonds.forEach(function (b) {
+      var A = m.atoms[b[0]], B = m.atoms[b[1]], a = P[b[0]], d = sub(P[b[1]], a), L = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]), u = mul(d, 1 / L);
+      var ra = RAD[A.e] - .04, run = L - ra - (RAD[B.e] - .04), n = Math.max(2, Math.ceil(run / .13)), side = b[2] === 2 ? turn(bondSide(m, b), yaw, pitch, roll) : null;
+      (side ? [-1, 1] : [0]).forEach(function (k) {
+        var st = add(a, mul(u, ra)); if (side) st = add(st, mul(side, k * .11));
+        for (var i = 0; i < n; i++) {
+          var p0 = add(st, mul(u, run * i / n)), p1 = add(st, mul(u, run * (i + 1) / n)), own = ra + run * (i + .5) / n < L / 2 ? A : B;
+          items.push({ z: (p0[2] + p1[2]) / 2, p0: p0, p1: p1, dbl: !!side, lit: !o.only || own.e === o.only });
+        }
+      });
+    });
     m.atoms.forEach(function (a, i) { items.push({ z: P[i][2], a: a, p: P[i] }); });
     items.sort(function (x, y) { return x.z - y.z; });
+    c.lineCap = 'butt';
     items.forEach(function (it) {
-      if (it.b) {
-        var p = P[it.b[0]], q = P[it.b[1]], lit = !o.only || m.atoms[it.b[0]].e === o.only || m.atoms[it.b[1]].e === o.only;
-        c.globalAlpha = al * (lit ? 1 : .22);
-        var dbl = it.b[2] === 2, dx = q[0] - p[0], dy = q[1] - p[1], L = Math.sqrt(dx * dx + dy * dy) || 1, nx = -dy / L * .1 * s, ny = dx / L * .1 * s;
-        c.lineCap = 'round';
-        (dbl ? [-1, 1] : [0]).forEach(function (k) {
-          c.strokeStyle = '#5F6E82'; c.lineWidth = s * (dbl ? .13 : .2);
-          c.beginPath(); c.moveTo(cx + p[0] * s + k * nx, cy + p[1] * s + k * ny); c.lineTo(cx + q[0] * s + k * nx, cy + q[1] * s + k * ny); c.stroke();
-          c.strokeStyle = '#AEBBCB'; c.lineWidth = s * (dbl ? .05 : .08);
-          c.beginPath(); c.moveTo(cx + p[0] * s + k * nx, cy + p[1] * s + k * ny); c.lineTo(cx + q[0] * s + k * nx, cy + q[1] * s + k * ny); c.stroke();
-        });
-      } else {
-        var on = !o.only || it.a.e === o.only;
-        c.globalAlpha = al * (on ? 1 : .22);
-        ball(c, cx + it.p[0] * s, cy + it.p[1] * s, RAD[it.a.e] * s, C[it.a.e]);
-        if (o.only && on) { c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1.2; c.beginPath(); c.arc(cx + it.p[0] * s, cy + it.p[1] * s, RAD[it.a.e] * s + 1.5, 0, TAU); c.stroke(); }
+      if (it.a) {
+        var on = !o.only || it.a.e === o.only, f = fog(it.z, on), x = cx + it.p[0] * s, y = cy + it.p[1] * s;
+        ball(c, x, y, RAD[it.a.e] * s, C[it.a.e].map(function (q) { return shade(q, f); }));
+        if (o.only && on) { c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1.2; c.beginPath(); c.arc(x, y, RAD[it.a.e] * s + 1.5, 0, TAU); c.stroke(); }
+        return;
       }
+      var x0 = cx + it.p0[0] * s, y0 = cy + it.p0[1] * s, x1 = cx + it.p1[0] * s, y1 = cy + it.p1[1] * s, dx = x1 - x0, dy = y1 - y0, l = Math.sqrt(dx * dx + dy * dy);
+      if (l < .02) return;
+      var ex = dx / l, ey = dy / l, k = fog(it.z, it.lit);
+      /* the pieces overlap a little, and the light core of each covers the join, so a stick shows no seams */
+      c.strokeStyle = shade(STICK[0], k); c.lineWidth = s * (it.dbl ? .13 : .2);
+      c.beginPath(); c.moveTo(x0 - ex * .4, y0 - ey * .4); c.lineTo(x1 + ex * .4, y1 + ey * .4); c.stroke();
+      c.strokeStyle = shade(STICK[1], k); c.lineWidth = s * (it.dbl ? .05 : .08);
+      c.beginPath(); c.moveTo(x0 - ex * .9, y0 - ey * .9); c.lineTo(x1 + ex * .9, y1 + ey * .9); c.stroke();
     });
+    c.lineCap = 'round';
+  }
+  var LAYER = null;
+  function model(c, m, cx, cy, s, o) {
+    o = o || {};
+    var al = o.alpha == null ? 1 : o.alpha;
+    if (al <= 0) return;
+    /* a model that fades is drawn whole on its own layer first, so its overlapping pieces fade as one picture */
+    if (al < 1 && c.canvas && c.canvas.ownerDocument) {
+      if (!LAYER) LAYER = c.canvas.ownerDocument.createElement('canvas');
+      if (LAYER.width !== c.canvas.width || LAYER.height !== c.canvas.height) { LAYER.width = c.canvas.width; LAYER.height = c.canvas.height; }
+      var g = LAYER.getContext('2d');
+      g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, LAYER.width, LAYER.height); g.setTransform(c.getTransform());
+      paintModel(g, m, cx, cy, s, o);
+      c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = al; c.drawImage(LAYER, 0, 0); c.restore();
+      return;
+    }
     c.globalAlpha = 1;
-    return P;
+    paintModel(c, m, cx, cy, s, o);
   }
 
   /* ======================================================================= the building blocks, drawn flat */
@@ -336,30 +377,26 @@
     }
     strandPath('y1', 'z1');
     if (sec > 0) strandPath('y2', 'z2');
+    /* each base has its own depth, half way between its strand and the axis, and ends at the inner edge of its strand: a strand and its own bases
+       never lie over one another, so nothing jumps as the helix turns */
     pts.forEach(function (p) {
-      var z = (p.z1 + p.z2) / 2 + .001 * p.i;
-      items.push({ z: z, f: function () {
-        var w = Math.max(2.4, dx * .68), near = .8 + .2 * Math.abs(Math.cos(base + tw * p.i * TAU / 10));
-        var e1 = y0 - p.s * GAP, s2 = y0 + p.s * GAP + p.off;
-        c.lineCap = 'butt';
-        c.globalAlpha = o.dimBases ? .35 : 1;
-        if (Math.abs(p.y1 - e1) > 1 && (p.y1 - y0) * p.s < 0) { c.strokeStyle = mixHex('#0B1420', baseCol(p.b), near); c.lineWidth = w; c.beginPath(); c.moveTo(p.x, p.y1); c.lineTo(p.x, e1); c.stroke(); }
-        if (sec > 0 && Math.abs(p.y2 - s2) > 1 && (p.y2 - s2) * p.s > 0) { c.strokeStyle = mixHex('#0B1420', baseCol(p.p), near); c.lineWidth = w; c.beginPath(); c.moveTo(p.x, s2); c.lineTo(p.x, p.y2); c.stroke(); }
+      var w = Math.max(2.4, dx * .68), near = .8 + .2 * Math.abs(Math.cos(base + tw * p.i * TAU / 10)), e1 = y0 - p.s * GAP, s2 = y0 + p.s * GAP + p.off, edge = o.w * .5;
+      var o1 = p.y1 + p.s * edge, o2 = p.y2 - p.s * edge, tall = Math.abs(p.y2 - p.y1) > 30, letters = o.show && o.show.letters && tall;
+      function plate(ya, yb, col, ch, ly) {
+        c.lineCap = 'butt'; c.globalAlpha = o.dimBases ? .35 : 1;
+        c.strokeStyle = mixHex('#0B1420', col, near); c.lineWidth = w; c.beginPath(); c.moveTo(p.x, ya); c.lineTo(p.x, yb); c.stroke();
         c.globalAlpha = 1;
-        /* the bonds between a pair: two between A and T, three between C and G */
-        if (o.show && o.show.bonds && sec >= 1 && p.off < .5 && Math.abs(p.y2 - p.y1) > GAP * 3) {
-          var nb = p.b === 'A' || p.b === 'T' ? 2 : 3;
-          c.strokeStyle = 'rgba(255,255,255,' + (o.bondAlpha == null ? .95 : o.bondAlpha) + ')'; c.lineWidth = 1.4 / (o.cam || 1); c.setLineDash([2 / (o.cam || 1), 1.6 / (o.cam || 1)]);
-          c.beginPath();
-          for (var q = 0; q < nb; q++) { var bx = p.x + (nb === 2 ? (q ? .2 : -.2) : (q - 1) * .3) * w; c.moveTo(bx, y0 - GAP); c.lineTo(bx, y0 + GAP); }
-          c.stroke(); c.setLineDash([]);
-        }
-        if (o.show && o.show.letters && Math.abs(p.y2 - p.y1) > 30) {
-          c.font = '700 ' + Math.min(13, dx * .92) + 'px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-          c.fillStyle = '#0B1420';
-          c.fillText(p.b, p.x, (p.y1 + e1) / 2);
-          if (sec > 0) c.fillText(p.p, p.x, (s2 + p.y2) / 2);
-        }
+        if (letters) { c.font = '700 ' + Math.min(13, dx * .92) + 'px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#0B1420'; c.fillText(ch, p.x, ly); }
+      }
+      if (Math.abs(o1 - e1) > 1 && (o1 - y0) * p.s < 0) items.push({ z: p.z1 * .5 + .001 * p.i, f: function () { plate(o1, e1, baseCol(p.b), p.b, (p.y1 + e1) / 2); } });
+      if (sec > 0 && Math.abs(o2 - s2) > 1 && (o2 - s2) * p.s > 0) items.push({ z: p.z2 * .5 + .001 * p.i, f: function () { plate(s2, o2, baseCol(p.p), p.p, (s2 + p.y2) / 2); } });
+      /* the bonds between a pair: two between A and T, three between C and G */
+      if (o.show && o.show.bonds && sec >= 1 && p.off < .5 && Math.abs(p.y2 - p.y1) > GAP * 3) items.push({ z: .001 * p.i, f: function () {
+        var nb = p.b === 'A' || p.b === 'T' ? 2 : 3;
+        c.strokeStyle = 'rgba(255,255,255,' + (o.bondAlpha == null ? .95 : o.bondAlpha) + ')'; c.lineWidth = 1.4 / (o.cam || 1); c.setLineDash([2 / (o.cam || 1), 1.6 / (o.cam || 1)]);
+        c.beginPath();
+        for (var q = 0; q < nb; q++) { var bx = p.x + (nb === 2 ? (q ? .2 : -.2) : (q - 1) * .3) * w; c.moveTo(bx, y0 - GAP); c.lineTo(bx, y0 + GAP); }
+        c.stroke(); c.setLineDash([]);
       } });
     });
     items.sort(function (a, b) { return a.z - b.z; });
