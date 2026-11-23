@@ -65,7 +65,7 @@
 
   /* ======================================================================= the tube */
   Views.add('benchv', function (spec, ctx) {
-    var W = 560, H = 330, amb = 0;
+    var W = 560, H = 420, amb = 0, BY = 168, BH = 190, BW = 340;
     function sub() { return STAGES[B.test][B.stage - 1]; }
     var scene = {
       W: W, H: H,
@@ -76,7 +76,7 @@
       draw: function (c) {
         D.frame(c, 0, 0, W, H, 16, function () {
           D.ground(c, 0, 0, W, H);
-          var f = B.shown(), t = B.test, s = B.stage, k = ease(B.k), X = W / 2, Y = 78, TW = 60, TH = 176, tilt = 0, dy = 0, shake = 0, q;
+          var f = B.shown(), t = B.test, s = B.stage, k = ease(B.k), X = W / 2, Y = 78, TW = 96, TH = 262, tilt = 0, dy = 0, shake = 0, q;
           if (t !== 'emulsion') { D.tile(c, 40, 8, W - 80, H - 16); D.setLight(true); }
           var name = sub() ? sub()[0] : '';
           if (t === 'dcpip') {
@@ -84,17 +84,17 @@
           } else if (t === 'benedict') {
             var heatK = s >= 2 ? (name === 'heat' ? B.k : 1) : 0;
             q = T.liquid('benedict', f, s >= 1 ? (s === 1 ? k : 1) : 0, heatK, .5);
-            if (s >= 2) { dy = (name === 'heat' && B.busy ? Math.min(1, B.k * 3.5) : 1) * 8; }
+            if (s >= 2) { dy = (name === 'heat' && B.busy ? Math.min(1, B.k * 3.5) : 1) * 14; }
           } else if (t === 'emulsion') {
             q = T.liquid('emulsion', f, s >= 1 ? (s === 1 ? k : 1) : 0, s >= 2 ? (name === 'pour' ? ease(seg(B.k, .55, 1)) : 1) : 0, s >= 2 ? .62 : .42);
             if (s === 1 && B.busy) shake = Math.sin(amb * 30) * 3.5;
           } else {
             q = T.liquid(t, f, s >= 1 ? Math.min(1, k * 1.5) : 0, s >= 1 ? ease(seg(B.k, .45, 1)) : 0, .5);
           }
-          if (!(t === 'benedict' && s >= 2)) D.rack(c, X - 150, X + 150, 170, 84);
-          if (t === 'benedict' && s >= 2) D.bath(c, X, 146, 280, 118, name === 'heat' && B.busy ? 1 : .35, amb);
+          if (!(t === 'benedict' && s >= 2)) D.rack(c, X - 170, X + 170, 214, 136);
+          if (t === 'benedict' && s >= 2) D.bath(c, X, BY, BW, BH, name === 'heat' && B.busy ? 1 : .35, amb);
           D.tube(c, X + shake, Y + dy, TW, TH, q, tilt);
-          if (t === 'benedict' && s >= 2) { c.fillStyle = 'rgba(127,196,236,.24)'; c.fillRect(X - 140, 146 + 118 * .24, 280, 118 * .76); }
+          if (t === 'benedict' && s >= 2) { c.fillStyle = 'rgba(127,196,236,.07)'; c.fillRect(X - BW / 2, BY + BH * .24, BW, BH * .76); }
           /* the reagent going in */
           if (B.busy && (name === 'add' || name === 'pour')) {
             var col = t === 'dcpip' ? T.BY[f].look.col : name === 'pour' ? '#E6EEF2' : T.TESTS[t].col;
@@ -104,8 +104,8 @@
           /* the name of what is in the tube */
           c.font = '600 12.5px Inter, system-ui, sans-serif';
           var nm = B.myst ? 'mystery food' : T.BY[f].name, tw = c.measureText(nm).width + 16;
-          c.fillStyle = '#FFFFFF'; D.rr(c, X - tw / 2, 284, tw, 22, 6); c.fill(); c.strokeStyle = '#A9B6C2'; c.lineWidth = 1; c.stroke();
-          c.fillStyle = '#10202E'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(nm, X, 295.5); D.setLight(false);
+          c.fillStyle = '#FFFFFF'; D.rr(c, X - tw / 2, 379, tw, 22, 6); c.fill(); c.strokeStyle = '#A9B6C2'; c.lineWidth = 1; c.stroke();
+          c.fillStyle = '#10202E'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(nm, X, 390.5); D.setLight(false);
         });
       },
       labels: function () { return []; },

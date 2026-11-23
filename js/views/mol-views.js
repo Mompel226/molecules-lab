@@ -26,6 +26,8 @@
     el.addEventListener('pointermove', function (e) { if (!last) return; on((e.clientX - last[0]) * .012, (e.clientY - last[1]) * .012); last = [e.clientX, e.clientY]; V.paint(); });
     ['pointerup', 'pointercancel'].forEach(function (n) { el.addEventListener(n, function () { last = null; }); });
     el.setAttribute('tabindex', '0'); el.setAttribute('role', 'slider'); el.setAttribute('aria-label', 'Turn the model: use the left and right arrow keys');
+    var hint = document.createElement('span'); hint.className = 'memv__hint'; hint.textContent = 'Drag to turn'; hint.setAttribute('aria-hidden', 'true');
+    el.parentNode.appendChild(hint);
     el.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { on(e.key === 'ArrowLeft' ? -.2 : .2, 0); V.paint(); e.preventDefault(); }
     });
@@ -43,24 +45,21 @@
 
   /* ======================================================================= Elements */
   Views.add('atomsv', function (spec, ctx) {
-    var W = 560, H = 330, mode = 'glucose', only = null, yaw = .34, pitch = -.92;
+    var W = 560, H = 400, mode = 'glucose', only = null, yaw = -.56, pitch = -.32, roll = 3.4;   /* at rest the ring faces the reader, as in the film */
     var MOD = { glucose: D.MODELS.glucose, fatty: D.MODELS.fatty, amino: D.MODELS.amino };
-    var FIT = { glucose: 39, fatty: 21, amino: 56 }, POSE = { glucose: [.34, -.92], fatty: [.22, .1], amino: [0, -.18] };
+    var FIT = { glucose: 45, fatty: 22, amino: 64 }, POSE = { glucose: [-.56, -.32, 3.4], fatty: [.22, .1, 0], amino: [0, -.18, 0] };
     var NAME = { glucose: 'glucose, a carbohydrate', fatty: 'a fatty acid, part of a fat', amino: 'an amino acid, part of a protein' };
     var scene = {
       W: W, H: H, tick: function () {},
       draw: function (c) {
         D.frame(c, 0, 0, W, H, 16, function () {
           D.ground(c, 0, 0, W, H);
-          D.model(c, MOD[mode], W / 2, H / 2 + 4, FIT[mode], { yaw: yaw, pitch: pitch, only: only });
+          D.model(c, MOD[mode], W / 2, H / 2 + 18, FIT[mode], { yaw: yaw, pitch: pitch, roll: roll, only: only });
+          /* the name is of the whole molecule, so it is a title and not a line to one atom */
+          c.fillStyle = '#EAF2F8'; c.font = '600 15px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(NAME[mode], W / 2, 20);
         });
       },
-      labels: function () {
-        /* the name's line ends on the highest atom near the middle of the model, however it has been turned */
-        var best = null;
-        MOD[mode].atoms.forEach(function (a) { var p = D.turn(a.p, yaw, pitch), x = W / 2 + p[0] * FIT[mode], y = H / 2 + 4 + p[1] * FIT[mode]; if (Math.abs(x - W / 2) < 60 && (!best || y < best[1])) best = [x, y]; });
-        return [{ id: 'n', text: NAME[mode], x: best ? best[0] : W / 2, y: best ? best[1] - 5 : H / 2 - 74, side: 'T' }];
-      },
+      labels: function () { return []; },
       read: function (pill) {
         var f = D.formula(MOD[mode]);
         pill('c', String(f.C || 0), only === 'C' ? 'ok' : ''); pill('h', String(f.H || 0), only === 'H' ? 'ok' : '');
@@ -75,9 +74,9 @@
     });
     var B2 = bar(V, 'Highlight one element', [['C', 'Carbon'], ['H', 'Hydrogen'], ['O', 'Oxygen'], ['N', 'Nitrogen']], function (id) { only = only === id ? null : id; B2.press(only); V.paint(); });
     dragTurn(V, function (dx, dy) { yaw += dx; pitch = Math.max(-1.5, Math.min(1.5, pitch + dy)); V.names(); });
-    function set(id) { mode = id; yaw = POSE[id][0]; pitch = POSE[id][1]; V.press(id); V.names(); V.paint(); }
+    function set(id) { mode = id; yaw = POSE[id][0]; pitch = POSE[id][1]; roll = POSE[id][2]; V.press(id); V.names(); V.paint(); }
     return {
-      el: V.el, start: function () { V.start(); set(mode); }, stop: V.stop,
+      el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); set(mode); }, stop: V.stop,
       say: 'Drag to turn the model',
       credit: 'Models drawn for this lab from real bond lengths and angles.',
       focus: function (part) { if (part === 'carb') set('glucose'); else if (part === 'fat') set('fatty'); else if (part === 'prot') set('amino'); only = part === 'prot' ? 'N' : null; B2.press(only); V.paint(); }
@@ -96,13 +95,14 @@
         D.frame(c, 0, 0, W, H, 16, function () {
           D.ground(c, 0, 0, W, H);
           S.polyVia(c, from, to, k, amb);
+          if (k >= 1 && cur !== 'glucose') S.drawBox(c, S.polyBox(LAY[cur]), 1);
         });
       },
       labels: function () {
         if (k < 1) return [];
         if (cur === 'glucose') return [{ id: 'g', text: 'one glucose molecule', x: P.scatter.p[6][0], y: P.scatter.p[6][1] - 8, side: 'T' }];
-        var a = cur === 'starch' ? P.starch.p[14] : cur === 'glycogen' ? P.glycogen.p[P.glycogen.tip] : P.cellulose.p[5];
-        return [{ id: cur, text: cur === 'starch' ? 'starch' : cur === 'glycogen' ? 'glycogen' : 'cellulose', x: a[0], y: a[1] - 8, side: 'T' }];
+        var b = S.polyBox(LAY[cur]);
+        return [{ id: cur, text: cur, x: b.cx, y: b.y, side: 'T' }];
       },
       read: function (pill) { pill('w', WHERE[cur]); }
     };
@@ -120,7 +120,7 @@
       var o = LAY[id]; from = k >= .5 ? to : from; to = o; k = V.isStill() ? 1 : 0; cur = id; V.press(id); V.names(); V.paint();
     }
     return {
-      el: V.el, start: function () { V.start(); V.press(cur); }, stop: V.stop,
+      el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); V.press(cur); }, stop: V.stop,
       say: '46 glucose molecules in every picture',
       credit: 'Drawn for this lab. A real molecule of starch holds thousands of glucose molecules.',
       focus: function (part) { if (LAY[part]) set(part); else if (part === 'large') set('starch'); }
@@ -129,14 +129,16 @@
 
   /* ======================================================================= Fats and oils */
   Views.add('fatv', function (spec, ctx) {
-    var W = 560, H = 330, mode = 'one', amb = 0, kAnim = 1;
+    var W = 560, H = 400, mode = 'one', amb = 0, kAnim = 1;
     function eMol(c, x, y, s, kink, wob) {
       var gh = 66 * s, gw = 13 * s, ys = [y - gh * .36, y, y + gh * .36];
       ys.forEach(function (yy, i) {
-        var a = (kink ? [-.1, .08, .14][i] : 0) + Math.sin(amb * 1.6 + i * 2 + x * .03) * wob;
-        D.tail(c, D.tailPts(x + gw * .5, yy, a, 13, 7.4 * s, kink ? [.72, -.62, .62][i] : 0), 2.5 * s);
+        var a = (kink ? [-.14, 0, .14][i] : 0) + Math.sin(amb * 1.6 + i * 2 + x * .03) * wob;
+        D.tail(c, D.tailPts(x + gw * .5, yy, a, 13, 7.4 * s, kink ? [-.62, .3, .72][i] : 0   /* one bend each, away from its neighbour, so the chains never cross */), 2.5 * s);
       });
       D.glycerolBar(c, x, y, gh, gw);
+      /* each fatty acid is joined by its acid end at one of glycerol's three places */
+      ys.forEach(function (yy) { D.ball(c, x + gw * .5, yy, 2.9 * s, C.O); });
     }
     var scene = {
       W: W, H: H,
@@ -148,24 +150,27 @@
           c.globalAlpha = a;
           if (mode === 'one') {
             c.save(); c.translate(0, 0);
-            eMol(c, 148, H / 2, 2.25, false, 0);
+            eMol(c, 150, H / 2, 2.8, false, 0);
             c.restore();
+            /* a bracket: the name stands for all three fatty acids */
+            c.strokeStyle = 'rgba(255,233,179,.85)'; c.lineWidth = 1.8; c.lineJoin = 'round'; c.beginPath();
+            c.moveTo(434, H / 2 - 88); c.lineTo(444, H / 2 - 88); c.lineTo(444, H / 2 + 88); c.lineTo(434, H / 2 + 88); c.stroke();
           } else if (mode === 'fat') {
-            for (var r = 0; r < 4; r++) for (var q = 0; q < 2; q++) eMol(c, 62 + q * 232 + (r % 2 ? 22 : 0), 48 + r * 78, .92, false, .008);
+            for (var r = 0; r < 5; r++) for (var q = 0; q < 4; q++) eMol(c, 38 + q * 122 + (r % 2 ? 34 : 0), 60 + r * 70, 1, false, .008);
           } else {
             /* an oil: the bent chains cannot pack, so the molecules lie apart and move past each other */
-            var SP = [[92, 76, .3], [272, 62, -.5], [452, 84, 2.7], [120, 214, -2.6], [292, 182, 1.1], [456, 240, -.6], [214, 276, .15]];
+            var SP = [[92, 92, .3], [272, 75, -.5], [452, 102, 2.7], [120, 259, -2.6], [292, 220, 1.1], [456, 291, -.6], [214, 334, .15]];
             SP.forEach(function (q, i) {
               var x = q[0] + Math.sin(amb * .35 + i * 2) * 13, y = q[1] + Math.cos(amb * .3 + i * 3) * 10, ang = q[2] + Math.sin(amb * .2 + i) * .22;
               c.save(); c.translate(x, y); c.rotate(ang); c.translate(-38, 0);
-              eMol(c, 0, 0, .74, true, .03); c.restore();
+              eMol(c, 0, 0, .86, true, .03); c.restore();
             });
           }
           c.globalAlpha = 1;
         });
       },
       labels: function () {
-        if (mode === 'one') return [{ id: 'g', text: 'glycerol', x: 148, y: H / 2 - 72, side: 'T' }, { id: 'f', text: 'three fatty acids', x: 340, y: H / 2 - 54, side: 'T' }];
+        if (mode === 'one') return [{ id: 'g', text: 'glycerol', x: 150, y: H / 2 - 92, side: 'T' }, { id: 'f', text: 'three fatty acids', x: 444, y: H / 2 - 88, side: 'T' }];
         return [];
       },
       read: function (pill) { pill('s', mode === 'one' ? 'one glycerol + three fatty acids' : mode === 'fat' ? 'solid at room temperature' : 'liquid at room temperature'); }
@@ -178,7 +183,7 @@
     });
     function set(id) { if (id !== mode) kAnim = V.isStill() ? 1 : 0; mode = id; V.press(id); V.names(); V.paint(); }
     return {
-      el: V.el, start: function () { V.start(); V.press(mode); }, stop: V.stop, say: 'Press to compare a fat and an oil',
+      el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); V.press(mode); }, stop: V.stop, say: 'Press to compare a fat and an oil',
       credit: 'Drawn for this lab.',
       focus: function (part) { if (part === 'one' || part === 'fat' || part === 'oil') set(part); }
     };
@@ -186,7 +191,7 @@
 
   /* ======================================================================= Proteins */
   Views.add('protv', function (spec, ctx) {
-    var W = 560, H = 330, n = 34, step = 15.2, r = 7, st = 'free', k = 1, amb = 0, kinds = S.KINDS1, F = S.FOLD1, was = 0, now = 0;
+    var W = 560, H = 400, n = 34, step = 18, r = 8.4, st = 'free', k = 1, amb = 0, kinds = S.KINDS1, F = S.FOLD1, was = 0, now = 0;
     var R = D.rng(9), free = []; for (var i = 0; i < n; i++) free.push([38 + R() * (W - 76), 34 + R() * (H - 68)]);
     function shapeOf(s) { return s === 'fold' || s === 'other' ? 1 : 0; }
     var scene = {
@@ -219,7 +224,7 @@
       was = f; now = shapeOf(id); k = V.isStill() ? 1 : 0; st = id; V.press(id); V.names(); V.paint();
     }
     return {
-      el: V.el, start: function () { V.start(); V.press(st); }, stop: V.stop, say: 'Press to build a protein',
+      el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); V.press(st); }, stop: V.stop, say: 'Press to build a protein',
       credit: 'Drawn for this lab. A real protein is usually hundreds of amino acids long.',
       focus: function (part) { if (part === 'aa') set('free'); else if (part === 'chain' || part === 'fold') set(part); else if (part === 'order') set('other'); }
     };
@@ -227,7 +232,7 @@
 
   /* ======================================================================= DNA */
   Views.add('dnav', function (spec, ctx) {
-    var W = 560, H = 330, SEQ = 'ATGCCGTACGATTGCA', mode = 'helix', tw = 1, target = 1, turn = .55;
+    var W = 560, H = 400, SEQ = 'ATGCCGTACGATTGCA', mode = 'helix', tw = 1, target = 1, turn = .55, G0 = D.dnaGeom(0), SX = G0.dx;
     var scene = {
       W: W, H: H,
       tick: function (dt) { if (tw !== target) { var d = dt / 1.6; tw = tw < target ? Math.min(target, tw + d) : Math.max(target, tw - d); } },
@@ -242,12 +247,12 @@
         });
       },
       labels: function () {
-        var x = (W - 15 * 30) / 2;
+        var x = (W - 15 * SX) / 2, up = G0.R * .86;   /* a name's line stops above the base's letter */
         if (tw !== target) return [];
-        if (mode === 'strands') return [{ id: 's1', text: 'strand 1', x: x + 2 * 30, y: H / 2 - 42, side: 'T' }, { id: 's2', text: 'strand 2', x: x + 13 * 30, y: H / 2 + 42, side: 'B' }];
-        if (mode === 'bases') return [{ id: 'b', text: 'one base', x: x + 5 * 30, y: H / 2 - 30, side: 'T' }];
-        if (mode === 'bonds') return [{ id: 'b', text: 'bonds between the bases', x: x + 8 * 30 + 6, y: H / 2 - 3, side: 'T' }];
-        if (mode === 'pairs') return [{ id: 'at', text: 'A with T', x: x, y: H / 2 - 30, side: 'T' }, { id: 'cg', text: 'C with G', x: x + 3 * 30, y: H / 2 - 30, side: 'T' }];
+        if (mode === 'strands') return [{ id: 's1', text: 'strand 1', x: x + 2 * SX, y: H / 2 - G0.R, side: 'T' }, { id: 's2', text: 'strand 2', x: x + 13 * SX, y: H / 2 + G0.R, side: 'B' }];
+        if (mode === 'bases') return [{ id: 'b', text: 'one base', x: x + 5 * SX, y: H / 2 - up, side: 'T' }];
+        if (mode === 'bonds') return [{ id: 'b', text: 'bonds between the bases', x: x + 8 * SX + SX * .68 * .3, y: H / 2 - 3, side: 'T'   /* on the third bond of this C–G pair, beside the letter */ }];
+        if (mode === 'pairs') return [{ id: 'at', text: 'A with T', x: x, y: H / 2 - up, side: 'T' }, { id: 'cg', text: 'C with G', x: x + 3 * SX, y: H / 2 - up, side: 'T' }];
         return [];
       },
       read: function (pill) { pill('s', mode === 'helix' ? 'two strands coiled together' : mode === 'strands' ? 'two strands' : mode === 'bases' ? 'each strand contains bases' : mode === 'bonds' ? 'bonds hold the strands together' : 'A with T, C with G'); }
@@ -263,7 +268,7 @@
     dragTurn(V, function (dx) { turn += dx; });
     function set(id) { mode = id; target = id === 'helix' ? 1 : 0; if (V.isStill()) tw = target; V.press(id); V.names(); V.paint(); }
     return {
-      el: V.el, start: function () { V.start(); V.press(mode); }, stop: V.stop, say: 'Drag to turn the helix',
+      el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); V.press(mode); }, stop: V.stop, say: 'Drag to turn the helix',
       credit: 'Drawn for this lab. The bases keep the colours of the Inheritance Lab.',
       focus: function (part) { if (['helix', 'strands', 'bases', 'bonds', 'pairs'].indexOf(part) >= 0) set(part); }
     };
@@ -278,49 +283,52 @@
 
   /* ---------- iodine on a spotting tile; Benedict's before and after heating ---------- */
   Views.add('sugarv', function (spec, ctx) {
-    var W = 560, H = 330, mode = 'iodine', on = false, k = 0, amb = 0;
+    var W = 560, H = 420, mode = 'iodine', on = false, k = 0, amb = 0;
     var WELLS = [['cornflour', 'cornflour'], ['tablesugar', 'table sugar'], ['honey', 'honey'], ['water', 'water']];
     var SCALE = [[0, 'none'], [1, 'very low'], [2, 'low'], [3, 'higher'], [4, 'highest']];
     var scene = {
       W: W, H: H,
-      tick: function (dt) { amb += dt; if (on && k < 1) k = Math.min(1, k + dt / 2.4); else if (!on && k > 0) k = Math.max(0, k - dt / .5); },
+      tick: function (dt) { amb += dt; if (on && k < 1) k = Math.min(1, k + dt / (mode === 'ben' ? 5 : 2.4)); else if (!on && k > 0) k = Math.max(0, k - dt / .5); },
       draw: function (c) {
         D.frame(c, 0, 0, W, H, 16, function () {
           D.ground(c, 0, 0, W, H);
           if (mode === 'iodine') {
-            D.rr(c, 56, 56, 448, 214, 16);
-            var tg = c.createLinearGradient(0, 56, 0, 270); tg.addColorStop(0, '#F7F8FA'); tg.addColorStop(1, '#D5DBE2');
+            D.rr(c, 18, 70, 524, 280, 18);
+            var tg = c.createLinearGradient(0, 70, 0, 350); tg.addColorStop(0, '#F7F8FA'); tg.addColorStop(1, '#D5DBE2');
             c.fillStyle = tg; c.fill(); c.strokeStyle = '#8C98A6'; c.lineWidth = 1.2; c.stroke();
             WELLS.forEach(function (w, i) {
-              var x = 126 + i * 103, y = 150, f = T.BY[w[0]], drop = ease(seg(k, 0, .4 + i * .05)), ch = ease(seg(k, .35 + i * .06, .75 + i * .06));
-              c.beginPath(); c.ellipse(x, y, 40, 38, 0, 0, TAU);
-              var wg = c.createRadialGradient(x, y - 14, 4, x, y, 40); wg.addColorStop(0, '#FFFFFF'); wg.addColorStop(1, '#C9D0D9');
+              var x = 86 + i * 129, y = 188, f = T.BY[w[0]], drop = ease(seg(k, 0, .4 + i * .05)), ch = ease(seg(k, .35 + i * .06, .75 + i * .06));
+              c.beginPath(); c.ellipse(x, y, 58, 56, 0, 0, TAU);
+              var wg = c.createRadialGradient(x, y - 20, 6, x, y, 58); wg.addColorStop(0, '#FFFFFF'); wg.addColorStop(1, '#C9D0D9');
               c.fillStyle = wg; c.fill(); c.strokeStyle = '#A4AFBC'; c.stroke();
               var col = D.mixHex(f.look.col, T.positive('iodine', w[0]) ? C.blueBlack : C.iodine, Math.max(drop * .6, ch));
-              c.beginPath(); c.ellipse(x, y + 2, 26, 24, 0, 0, TAU); c.fillStyle = col; c.fill();
-              c.beginPath(); c.ellipse(x - 8, y - 8, 7, 4, -.5, 0, TAU); c.fillStyle = 'rgba(255,255,255,.4)'; c.fill();
-              c.fillStyle = '#10202E'; c.font = '600 12.5px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-              c.fillText(w[1], x, y + 58);
+              c.beginPath(); c.ellipse(x, y + 3, 42, 40, 0, 0, TAU); c.fillStyle = col; c.fill();
+              c.beginPath(); c.ellipse(x - 14, y - 14, 11, 6, -.5, 0, TAU); c.fillStyle = 'rgba(255,255,255,.4)'; c.fill();
+              c.fillStyle = '#10202E'; c.font = '600 14px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+              c.fillText(w[1], x, y + 84);
             });
           } else {
             D.tile(c, 40, 8, W - 80, H - 16); D.setLight(true);
-            D.rack(c, 66, 494, 150, 96);
+            /* the colour changes only while the tubes stand in the hot water, with their liquid under its surface */
+            var inB = on ? seg(k, 0, .12) * (1 - seg(k, .88, 1)) : 0, dip = ease(inB) * 30;
+            if (inB < 1) { c.globalAlpha = 1 - inB; D.rack(c, 46, 514, 178, 142); c.globalAlpha = 1; }
+            if (inB > 0) { c.globalAlpha = inB; D.bath(c, W / 2, 150, 476, 200, inB, amb); c.globalAlpha = 1; }
             SCALE.forEach(function (q, i) {
-              var x = 112 + i * 84, v = q[0] * ease(seg(k, 0, .95));
-              var col = T.benCol(v), ppt = q[0] >= 3 ? seg(k, .6, 1) * (q[0] === 4 ? 1 : .55) : 0;
-              D.tube(c, x, 76, 40, 158, { col: col, level: .56, ppt: ppt });
-              tag(c, x, 252, q[1], 66);
+              var x = 100 + i * 90, v = q[0] * ease(seg(k, .16, .84));
+              var col = T.benCol(v), ppt = q[0] >= 3 ? seg(k, .55, .84) * (q[0] === 4 ? 1 : .55) : 0;
+              D.tube(c, x, 78 + dip, 60, 232, { col: col, level: .56, ppt: ppt });
+              tag(c, x, 368, q[1], 80);
             });
             c.fillStyle = '#10202E'; c.font = '600 12.5px Inter, system-ui, sans-serif'; c.textAlign = 'center';
-            c.fillText('concentration of reducing sugar', W / 2, 294);
-            D.arrow(c, 96, 42, 464, 42, 6, '#6B7C8D', { head: 16, headW: 11, halo: false });
+            c.fillText('concentration of reducing sugar', W / 2, 400);
+            D.arrow(c, 76, 44, 484, 44, 6, '#6B7C8D', { head: 16, headW: 11, halo: false });
             D.setLight(false);
           }
         });
       },
       labels: function () { return []; },
       read: function (pill) {
-        if (mode === 'iodine') pill('s', on && k >= 1 ? 'blue-black: starch is present' : on ? 'adding iodine solution…' : 'iodine solution is orange-brown');
+        if (mode === 'iodine') pill('s', on && k >= 1 ? 'blue-black: starch is present' : on ? 'adding iodine solution…' : 'the foods, before iodine solution is added');
         else pill('s', on && k >= 1 ? 'the colour shows the concentration of reducing sugar' : on ? 'heating…' : 'before heating, Benedict’s solution stays blue');
       }
     };
@@ -339,7 +347,7 @@
     }
     function set(id) { if (id !== mode) { on = false; k = 0; } mode = id; sync(); }
     return {
-      el: V.el, start: function () { V.start(); sync(); }, stop: V.stop, say: 'Press to carry out the test',
+      el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); sync(); }, stop: V.stop, say: 'Press to carry out the test',
       credit: 'Drawn for this lab, in the true colours of each test.',
       focus: function (part) { if (part === 'iodine') set('iodine'); else if (part === 'benedict' || part === 'heat' || part === 'scale') { set('ben'); if (part === 'scale' && !on) { on = true; if (V.isStill()) k = 1; sync(); } } }
     };
@@ -347,34 +355,38 @@
 
   /* ---------- biuret, emulsion and DCPIP, each beside its control ---------- */
   Views.add('threev', function (spec, ctx) {
-    var W = 560, H = 330, mode = 'biuret', on = false, k = 0;
+    var W = 560, H = 420, mode = 'biuret', on = false, k = 0, emS = null;
+    function emul() { return emS || (emS = S.emulsion()); }
+    function emT() { return k > 0 ? lerp(4, 26.5, k) : 0; }
     var CASE = {
-      biuret: { test: 'biuret', food: 'gelatine', name: 'gelatine', act: 'Add biuret solution', y: 'purple: protein is present', n: 'biuret solution is blue' },
-      emulsion: { test: 'emulsion', food: 'sesame', name: 'sesame oil', act: 'Shake with ethanol, pour into water', y: 'a cloudy white emulsion: a fat or oil is present', n: 'ethanol is colourless' },
+      biuret: { test: 'biuret', food: 'gelatine', name: 'gelatine', act: 'Add biuret solution', y: 'purple: protein is present', n: 'gelatine and water, before biuret solution is added' },
+      emulsion: { test: 'emulsion', food: 'sesame', name: 'sesame oil', act: 'Shake with ethanol, pour into water', y: 'a cloudy white emulsion: a fat or oil is present', n: 'sesame oil and water, before ethanol is added' },
       dcpip: { test: 'dcpip', food: 'kiwi', name: 'kiwi fruit', act: 'Add the food, one drop at a time', y: 'the blue colour disappears: vitamin C is present', n: 'DCPIP solution is blue' }
     };
     var scene = {
       W: W, H: H,
-      tick: function (dt) { if (on && k < 1) k = Math.min(1, k + dt / 2.4); else if (!on && k > 0) k = Math.max(0, k - dt / .5); },
+      tick: function (dt) { if (on && k < 1) k = Math.min(1, k + dt / (mode === 'emulsion' ? 9 : 2.4)); else if (!on && k > 0) k = Math.max(0, k - dt / .5); },
       draw: function (c) {
+        /* the emulsion test is the whole method: ethanol, shake, pour into water, and the cloud forms in the water */
+        if (mode === 'emulsion') { emul().draw(c, emT(), 0); return; }
         D.frame(c, 0, 0, W, H, 16, function () {
           D.ground(c, 0, 0, W, H);
-          var q = CASE[mode], e = ease(k), X1 = 190, X2 = 370, Y = 62, TH = 180, TW = 56;
+          var q = CASE[mode], e = ease(k), X1 = 170, X2 = 390, Y = 50, TH = 276, TW = 92;
           if (mode !== 'emulsion') { D.tile(c, 40, 8, W - 80, H - 16); D.setLight(true); }
-          D.rack(c, 130, 430, 158, 104);
+          D.rack(c, 66, 494, 200, 136);
           var a = mode === 'dcpip' ? 1 : Math.min(1, e * 2.2), d = mode === 'emulsion' ? ease(seg(k, .45, 1)) : ease(seg(k, .3, 1));
           var q1 = T.liquid(q.test, q.food, a, d, .55), q2 = T.liquid(q.test, 'water', a, mode === 'emulsion' ? d : 0, .55);
           D.tube(c, X1, Y, TW, TH, q1); D.tube(c, X2, Y, TW, TH, q2);
-          tag(c, X1, 276, q.name); tag(c, X2, 276, 'water (control)');
+          tag(c, X1, 362, mode === 'dcpip' ? (on ? 'DCPIP + kiwi fruit' : 'DCPIP') : q.name); tag(c, X2, 362, mode === 'dcpip' ? (on ? 'DCPIP + water (control)' : 'DCPIP') : 'water (control)');
           D.setLight(false);
         });
       },
-      labels: function () { return []; },
-      read: function (pill) { var q = CASE[mode]; pill('s', on && k >= 1 ? q.y : on ? 'wait…' : q.n); }
+      labels: function () { return mode === 'emulsion' ? emul().labels(emT()) : []; },
+      read: function (pill) { var q = CASE[mode]; pill('s', on && k >= 1 ? q.y : on ? (mode === 'emulsion' ? (emT() < 14 ? 'adding ethanol and shaking…' : 'pouring into water…') : 'wait…') : q.n); }
     };
     var V = MV({
       scene: scene, aria: 'Two test tubes, a food and water as a control. Press to carry out the biuret test, the ethanol emulsion test or the DCPIP test.',
-      barLabel: 'The test', buttons: [['biuret', 'Biuret'], ['emulsion', 'Ethanol emulsion'], ['dcpip', 'DCPIP'], ['act', 'Add', 'memv__btn--go'], ['clear', 'Start again']], read: [['s', 'Shown:']],
+      barLabel: 'The test', buttons: [['biuret', 'Biuret'], ['emulsion', 'Ethanol emulsion'], ['dcpip', 'DCPIP'], ['act', 'Add', 'memv__btn--go'], ['clear', 'Start again']], read: [['s', 'Shown:']], liveNames: true,
       onButton: function (id) {
         if (CASE[id]) { set(id); ctx.pick(id, { stay: true }); }
         else if (id === 'act') { on = true; if (V.isStill()) k = 1; sync(); }
@@ -384,7 +396,7 @@
     function sync() { V.press(mode); V.button('act').textContent = CASE[mode].act; V.button('act').disabled = on; V.names(); V.paint(); }
     function set(id) { if (id !== mode) { on = false; k = 0; } mode = id; sync(); }
     return {
-      el: V.el, start: function () { V.start(); sync(); }, stop: V.stop, say: 'Press to carry out the test',
+      el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); sync(); }, stop: V.stop, say: 'Press to carry out the test',
       credit: 'Drawn for this lab, in the true colours of each test.',
       focus: function (part) { if (CASE[part]) set(part); }
     };

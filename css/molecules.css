@@ -336,6 +336,8 @@ p,li,dd,figcaption{text-wrap:pretty}
 .mf__fig .mm__screen{flex:none}
 .mf__svg{display:block;width:100%;height:auto}
 .mm__screen > svg.mf__svg{height:auto}
+/* in the column, an animation and its key always fit a short laptop window without a scroll */
+@media (min-width:1001px){ #simHost .mm__screen > svg.mf__svg{max-height:calc(100dvh - 238px)} }
 .mf__read{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px}
 .mf__pill,.memv__pill{font-size:12.5px;border-radius:var(--r-pill);padding:3px 10px;border:1px solid var(--edge);background:var(--card-2);color:var(--ink)}
 .mf__pill b,.memv__pill b{font-weight:600}
@@ -358,7 +360,20 @@ p,li,dd,figcaption{text-wrap:pretty}
 .memv__btn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-tint);color:var(--accent)}
 .memv__btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .memv__btn[disabled]{opacity:.5;cursor:default}
-.memv__fig{flex:none;min-height:0;margin:0;display:flex;width:100%}
+.memv__fig{position:relative;flex:none;min-height:0;margin:0;display:flex;width:100%}
+/* the caption and the credit of a rich picture, one press away under a small i, so the picture has the column */
+.pinfo{position:absolute;z-index:5;right:6px;bottom:6px;color:#EAF2F8}
+.pinfo summary{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:rgba(10,18,26,.8);border:1.5px solid rgba(255,255,255,.42);cursor:pointer;list-style:none}
+.pinfo summary::-webkit-details-marker{display:none}
+.pinfo summary span::before{content:'i';font:italic 700 15px/1 Georgia,'Times New Roman',serif}
+.pinfo[open] summary span::before{content:'\00D7';font:700 16px/1 var(--font)}
+.pinfo summary:hover{border-color:var(--accent)}
+.pinfo summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pinfo__t{position:absolute;right:0;bottom:32px;width:min(330px,calc(100vw - 40px));margin:0;padding:9px 12px;border-radius:10px;background:rgba(10,18,26,.95);border:1px solid rgba(255,255,255,.2);text-align:left}
+.pinfo__say{display:block;font-size:13px;font-weight:600;line-height:1.35;color:#EAF2F8}
+.pinfo__credit{display:block;margin-top:3px;font-size:11.5px;line-height:1.35;color:#B9C7D3}
+/* what a turnable model does, on the model and not on a line of its own */
+.memv__hint{position:absolute;left:8px;bottom:9px;z-index:4;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600;color:#EAF2F8;background:rgba(10,18,26,.72);pointer-events:none}
 .memv__read{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 /* a sample of each particle in an animation's key, on the dark ground of the pictures */
 .anikey__sw{background:#10263A;border-radius:4px}

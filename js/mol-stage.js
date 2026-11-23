@@ -188,7 +188,9 @@
       if (key === lastKey && lay) return true;
       lastKey = key; narrow = rw < 440;
       var cs = global.getComputedStyle(root), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom), gap = parseFloat(cs.rowGap) || 6;
-      var room = H0 - pad - (bar.hidden ? 0 : bar.offsetHeight + gap) - (keyEl ? keyEl.offsetHeight + gap : 0) - (o.read ? read.offsetHeight + gap : 0) - (pk.hidden ? 0 : pk.offsetHeight + gap);
+      /* every row of buttons counts: the Elements picture has two */
+      var rows = 0; Array.prototype.forEach.call(root.children, function (x) { if (x.classList.contains('memv__bar') && !x.hidden) rows += x.offsetHeight + gap; });
+      var room = H0 - pad - rows - (keyEl ? keyEl.offsetHeight + gap : 0) - (o.read ? read.offsetHeight + gap : 0) - (pk.hidden ? 0 : pk.offsetHeight + gap);
       lay = frame(svg, bg, scene.W, scene.H, rw, narrow, 14);
       var want = rw * lay.vb.h / lay.vb.w;
       /* on a phone the picture scrolls with the page, whatever its height; in a column it fits the room there is */

@@ -90,7 +90,7 @@
       if (h.protein && added >= 1) q.col = D.mixHex(q.col, C.purple, done * (h.protein >= 1 ? 1 : .4));
     } else if (test === 'dcpip') {
       q.col = C.dcpip; q.cloud = 0; q.oil = 0; q.bits = 0;
-      if (h.vitc) q.col = D.mixHex(q.col, '#EFF3EA', done);
+      if (h.vitc) q.col = D.mixHex(q.col, l.col, done);   /* colourless, or the pale colour of the food: never a white */
     } else if (test === 'emulsion') {
       /* in ethanol the fat dissolves: a clear liquid. Poured into water (done), the fat comes out as tiny droplets */
       q.col = D.mixHex(l.col, f.id === 'sesame' ? '#EFE6BE' : C.clear, added); q.oil = 0; q.cloud = (l.cloud || 0) * (1 - added);

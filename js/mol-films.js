@@ -24,51 +24,75 @@
     };
   }
 
-  /* ======================================================================= the same glucose rings, joined three ways */
+  /* ======================================================================= the same glucose rings, joined three ways
+     Each ring is [x, y, angle of its carbon 1, turned over or not]; each link is [from, to, kind]. A link runs from carbon 4
+     of one ring (kind 'c') or from its carbon 6 at a branch (kind 'b') to carbon 1 of the next, so a glucose molecule has one
+     link in and at most two links out. Cellulose: every second ring is turned over, as in the real chain. */
   var POLY = (function () {
-    var W = 560, H = 330, N = 46, R = D.rng(11);
-    function empty() { return { p: [], links: [], r: 8 }; }
-    var scatter = empty();
-    for (var i = 0; i < N; i++) scatter.p.push([34 + R() * (W - 68), 34 + R() * (H - 68), R() * TAU]);
+    var W = 560, H = 400, N = 46, R = D.rng(11), d = 18.5, db = 27;   /* db: a branch's first link is longer, so its carbon 6 arm and oxygen can be seen */
+    function empty(r) { return { p: [], links: [], r: r }; }
+    /* a wave from x0 to x1 whose length is exactly `len`, cut into rings d apart */
+    function wave(x0, x1, yc, periods, phase, len) {
+      var at = function (A, u) { return [x0 + u * (x1 - x0), yc + A * Math.sin(u * TAU * periods + phase)]; };
+      var arc = function (A) { var l = 0, q = at(A, 0); for (var i = 1; i <= 1200; i++) { var v = at(A, i / 1200); l += Math.hypot(v[0] - q[0], v[1] - q[1]); q = v; } return l; };
+      var lo = 0, hi = H; for (var b = 0; b < 40; b++) { var m = (lo + hi) / 2; if (arc(m) < len) lo = m; else hi = m; }
+      var out = [], n = Math.round(len / d) + 1, want = 0, q = at(lo, 0), run = 0;
+      out.push(q);
+      for (var i = 1; i <= 6000 && out.length < n; i++) { var v = at(lo, i / 6000); run += Math.hypot(v[0] - q[0], v[1] - q[1]); q = v; if (run >= want + d) { want += d; out.push(v); } }
+      while (out.length < n) out.push(at(lo, 1));
+      return out.map(function (v, k) {
+        var a = out[Math.max(0, k - 1)], b2 = out[Math.min(n - 1, k + 1)], dir = Math.atan2(b2[1] - a[1], b2[0] - a[0]);
+        return [v[0], v[1], dir + Math.PI, 0];
+      });
+    }
+    /* separate molecules, spread out so that none lies on another */
+    var scatter = empty(8);
+    for (var i = 0; i < N; i++) {
+      var best = null, far = -1;
+      for (var t0 = 0; t0 < 14; t0++) {
+        var x = 34 + R() * (W - 68), y = 34 + R() * (H - 68), near = 1e9;
+        scatter.p.forEach(function (o) { near = Math.min(near, Math.hypot(o[0] - x, o[1] - y)); });
+        if (near > far) { far = near; best = [x, y]; }
+      }
+      scatter.p.push([best[0], best[1], R() * TAU, 0]);
+    }
     /* a single chain */
-    var chain = empty(); chain.r = 7.2;
-    for (var a = 0; a < N; a++) {
-      var u = a / (N - 1);
-      chain.p.push([30 + u * (W - 60), H / 2 + Math.sin(u * TAU * 1.5) * 58, 0]);
-      if (a) chain.links.push([a - 1, a]);
+    var chain = empty(6.6); chain.p = wave(32, 528, H / 2, 1, 0, (N - 1) * d);
+    for (var a = 1; a < N; a++) chain.links.push([a - 1, a, 'c']);
+    /* starch: a long chain with a few branches, each leaving from a carbon 6 */
+    var starch = empty(6.6); starch.p = wave(46, 514, 128, 1.05, .4, 27 * d);
+    for (var l0 = 1; l0 < 28; l0++) starch.links.push([l0 - 1, l0, 'c']);
+    function branch(m, from, turn, n, bend) {
+      var q = m.p[from], ang = q[2] - Math.PI + turn, x = q[0], y = q[1], prev = from, kind = 'b';
+      for (var k = 0; k < n; k++) {
+        var st0 = k ? d : db; x += st0 * Math.cos(ang); y += st0 * Math.sin(ang); m.p.push([x, y, ang + Math.PI, 0]);
+        m.links.push([prev, m.p.length - 1, kind]); prev = m.p.length - 1; kind = 'c'; ang += bend;
+      }
     }
-    /* starch: a long chain with a few branches */
-    var starch = empty(); starch.r = 7.6;
-    function along(out, x, y, ang, n, sp, bend) {
-      for (var k = 0; k < n; k++) { ang += bend || 0; x += sp * Math.cos(ang); y += sp * Math.sin(ang); out.push([x, y, ang]); }
-    }
-    var st = [];
-    for (var s0 = 0; s0 < 28; s0++) { var q = s0 / 27; st.push([40 + q * 480, 112 + Math.sin(q * TAU * 1.05 + .4) * 34, 0]); }
-    for (var l0 = 1; l0 < 28; l0++) starch.links.push([l0 - 1, l0]);
-    var b1 = st[8], b2 = st[19];
-    var i1 = st.length; along(st, b1[0], b1[1], 2.0, 9, 17.6, -.05);
-    for (var l1 = i1; l1 < i1 + 9; l1++) starch.links.push([l1 === i1 ? 8 : l1 - 1, l1]);
-    var i2 = st.length; along(st, b2[0], b2[1], 1.1, 9, 17.6, .05);
-    for (var l2 = i2; l2 < i2 + 9; l2++) starch.links.push([l2 === i2 ? 19 : l2 - 1, l2]);
-    starch.p = st;
-    /* glycogen: many short branches from the middle */
-    var gly = empty(); gly.r = 6.8; gly.p.push([W / 2, H / 2 + 2, 0]);
-    function grow(from, ang, n, depth) {
+    branch(starch, 8, .95, 9, .04); branch(starch, 19, .95, 9, -.04);
+    /* glycogen: a tree whose every branch forks again */
+    var gly = empty(6.6), G = { x: 278.1, y: 228.69, a0: -2.7365, root: 1.8928, l: [.6893, .7703], r: [1.1977, 1.1537] };
+    gly.p.push([G.x, G.y, G.a0 + Math.PI, 0]);
+    function run(from, dir, n, kind) {
       var x = gly.p[from][0], y = gly.p[from][1], prev = from;
       for (var k = 0; k < n; k++) {
-        x += 15.4 * Math.cos(ang); y += 15.4 * Math.sin(ang);
-        gly.p.push([x, y, ang]); gly.links.push([prev, gly.p.length - 1]); prev = gly.p.length - 1;
+        var st1 = !k && kind === 'b' ? db : d; x += st1 * Math.cos(dir); y += st1 * Math.sin(dir); gly.p.push([x, y, dir + Math.PI, 0]);
+        gly.links.push([prev, gly.p.length - 1, kind]); prev = gly.p.length - 1; kind = 'c';
       }
-      if (depth > 0) { grow(prev, ang - .62, depth === 2 ? 3 : 1, depth - 1); grow(prev, ang + .62, depth === 2 ? 3 : 1, depth - 1); }
+      return prev;
     }
-    [-Math.PI / 2, Math.PI / 6, Math.PI * 5 / 6].forEach(function (a0) { grow(0, a0, 5, 2); });
-    /* cellulose: straight chains lying side by side, with links between them */
-    var cel = empty(); cel.r = 9.6; cel.cross = [];
-    var rows = [12, 11, 12, 11], k = 0, rowY = [H / 2 - 66, H / 2 - 22, H / 2 + 22, H / 2 + 66], first = [];
+    function tree(from, dir, lens, kind, lv) {
+      var e = run(from, dir, lens[0], kind);
+      if (lens.length > 1) { tree(e, dir - G.l[lv], lens.slice(1), 'c', lv + 1); tree(e, dir + G.r[lv], lens.slice(1), 'b', lv + 1); }
+    }
+    tree(0, G.a0, [5, 3, 3], 'c', 0); tree(0, G.a0 + G.root, [4, 3, 3], 'b', 0);
+    /* cellulose: straight chains side by side; every second ring is turned over; links between the chains */
+    var cel = empty(12); cel.cross = [];
+    var rows = [12, 11, 12, 11], k2 = 0, rowY = [H / 2 - 93, H / 2 - 31, H / 2 + 31, H / 2 + 93], first = [], sp = 41;
     rows.forEach(function (n, ri) {
-      first.push(k);
-      var x0 = W / 2 - (n - 1) * 39 / 2;
-      for (var j = 0; j < n; j++) { cel.p.push([x0 + j * 39, rowY[ri], 0]); if (j) cel.links.push([k - 1, k]); k++; }
+      first.push(k2);
+      var x0 = W / 2 - (n - 1) * sp / 2;
+      for (var j = 0; j < n; j++) { cel.p.push([x0 + j * sp, rowY[ri], Math.PI, j % 2]); if (j) cel.links.push([k2 - 1, k2, 'c']); k2++; }
     });
     for (var r1 = 0; r1 < 3; r1++) {
       var n1 = rows[r1], n2 = rows[r1 + 1];
@@ -80,25 +104,46 @@
     gly.tip = tip;
     return { W: W, H: H, N: N, scatter: scatter, chain: chain, starch: starch, glycogen: gly, cellulose: cel };
   })();
+  function turnBy(a, b) { var q = (b - a) % TAU; if (q > Math.PI) q -= TAU; if (q < -Math.PI) q += TAU; return q; }
   /* draw the rings at the moment k (0…1) of the move from layout a to layout b; drift: small movement of free molecules */
   function drawPoly(c, a, b, k, drift, amb) {
-    var P = [], rr = lerp(a.r, b.r, k);
+    var P = [], rr = lerp(a.r, b.r, k), fk = clamp((k - .2) / .4);
     for (var i = 0; i < POLY.N; i++) {
-      var x = lerp(a.p[i][0], b.p[i][0], k), y = lerp(a.p[i][1], b.p[i][1], k), rot = lerp(a.p[i][2], b.p[i][2], k);
+      var x = lerp(a.p[i][0], b.p[i][0], k), y = lerp(a.p[i][1], b.p[i][1], k), rot = a.p[i][2] + turnBy(a.p[i][2], b.p[i][2]) * k;
       if (drift) { x += Math.sin(amb * .7 + i * 1.9) * 5 * drift; y += Math.cos(amb * .6 + i * 2.7) * 5 * drift; rot += Math.sin(amb * .4 + i) * .4 * drift; }
-      P.push([x, y, rot]);
+      var f = lerp(a.p[i][3] || 0, b.p[i][3] || 0, fk);
+      P.push({ x: x, y: y, rot: rot, turn: f, flip: f > .5 });
     }
-    var la = 1 - clamp(k * 3), lb = clamp((k - .6) / .4), w = rr * .36;
-    if (a.links.length && la > 0) a.links.forEach(function (q) { D.link(c, P[q[0]][0], P[q[0]][1], P[q[1]][0], P[q[1]][1], w, la); });
-    if (b.links.length && lb > 0) b.links.forEach(function (q) { D.link(c, P[q[0]][0], P[q[0]][1], P[q[1]][0], P[q[1]][1], w, lb); });
+    var la = 1 - clamp(k * 3), lb = clamp((k - .6) / .4), w = Math.max(1.5, rr * .3);
+    [[a, la], [b, lb]].forEach(function (m) { if (m[0].links.length && m[1] > 0) m[0].links.forEach(function (q) { D.joinLink(c, P[q[0]], P[q[1]], rr, q[2], w, m[1]); }); });
     var cr = b.cross && lb > 0 ? b.cross : a.cross && la > 0 ? a.cross : null;
     if (cr) {
       c.strokeStyle = 'rgba(214,240,255,' + (.75 * (b.cross ? lb : la)).toFixed(3) + ')'; c.lineWidth = 1.5; c.setLineDash([3, 3]);
-      c.beginPath(); cr.forEach(function (q) { c.moveTo(P[q[0]][0], P[q[0]][1]); c.lineTo(P[q[1]][0], P[q[1]][1]); }); c.stroke(); c.setLineDash([]);
+      c.beginPath();
+      /* each link between chains ends at the edge of its two rings */
+      cr.forEach(function (q) { var A = P[q[0]], B = P[q[1]], dx = B.x - A.x, dy = B.y - A.y, l = Math.hypot(dx, dy) || 1, e = rr * .95; c.moveTo(A.x + dx / l * e, A.y + dy / l * e); c.lineTo(B.x - dx / l * e, B.y - dy / l * e); });
+      c.stroke(); c.setLineDash([]);
     }
-    P.forEach(function (p) { D.glc(c, p[0], p[1], rr, p[2]); });
+    P.forEach(function (p) {
+      if (p.turn <= 0 || p.turn >= 1) { D.glc(c, p.x, p.y, rr, p.rot, null, false, p.turn >= 1); return; }
+      /* a ring turning over: it turns about the line from its carbon 1 to its carbon 4 */
+      c.save(); c.translate(p.x, p.y); c.rotate(p.rot); c.scale(1, Math.cos(Math.PI * p.turn)); c.rotate(-p.rot); c.translate(-p.x, -p.y);
+      D.glc(c, p.x, p.y, rr, p.rot); c.restore();
+    });
     return P;
   }
+  /* a dashed line round a whole molecule, so that its name stands for all of it and not for the one ring its line would end on */
+  function boxOf(pts, pad) {
+    var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    pts.forEach(function (p) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); });
+    return { x: x0 - pad, y: y0 - pad, w: x1 - x0 + 2 * pad, h: y1 - y0 + 2 * pad, cx: (x0 + x1) / 2 };
+  }
+  function drawBox(c, b, alpha) {
+    if (alpha <= 0) return;
+    c.strokeStyle = 'rgba(255,233,179,' + (.8 * alpha).toFixed(3) + ')'; c.lineWidth = 1.7; c.setLineDash([6, 5]);
+    D.rr(c, b.x, b.y, b.w, b.h, 14); c.stroke(); c.setLineDash([]);
+  }
+  function polyBox(lay) { return boxOf(lay.p, lay.r + 9); }
   /* one large molecule never changes into another: its glucose molecules separate first, then join in the new way */
   function polyVia(c, a, b, k, amb) {
     var F = POLY.scatter;
@@ -136,19 +181,22 @@
       }
       if (!ok) continue;
       var turns = [];
-      for (var t2 = 1; t2 < n - 1; t2++) { var dt = (dirs[t2] - dirs[t2 - 1] + 6) % 6; turns.push((dt > 3 ? dt - 6 : dt) * Math.PI / 3); }
+      for (var t2 = 2; t2 < n; t2++) { var dt = (dirs[t2] - dirs[t2 - 1] + 6) % 6; turns.push((dt > 3 ? dt - 6 : dt) * Math.PI / 3); }
       var mx = 0, my = 0; pts.forEach(function (q) { mx += q[0]; my += q[1]; });
-      return { turns: turns, first: dirs[0] * Math.PI / 3, cx: mx / n, cy: my / n };
+      return { turns: turns, first: dirs[1] * Math.PI / 3, cx: mx / n, cy: my / n };   /* dirs[0] is only where the walk started looking */
     }
     throw new Error('no fold found');
   }
   /* the beads for a fold reached by the fraction k, the chain's middle at (cx, cy) */
   function chainAt(F, n, cx, cy, step, k) {
-    /* it winds up from its far end, so the part not yet folded lies still (Inheritance Lab, 6 Nov 2026) */
-    var a = F.first * ease(seg(k, .78, 1)), pts = [[0, 0]], x = 0, y = 0, J = F.turns.length;
+    /* it winds up from its far end, so the part not yet folded lies still (Inheritance Lab, 6 Nov 2026). Before it folds, the
+       chain lies in a gentle wave: every bead stays one step from the next, so the chain has the same length in every shape */
+    var e0 = ease(seg(k, .78, 1)), a = F.first * e0, pts = [[0, 0]], x = 0, y = 0, J = F.turns.length;
     for (var i = 1; i < n; i++) {
-      if (i > 1) { var from = (J - (i - 2) - 1) / J * .78; a += F.turns[i - 2] * ease(seg(k, from, from + .22)); }
-      x += step * Math.cos(a); y += step * Math.sin(a); pts.push([x, y]);
+      var e = e0;
+      if (i > 1) { var from = (J - (i - 2) - 1) / J * .78; e = ease(seg(k, from, from + .22)); a += F.turns[i - 2] * e; }
+      var ang = a + .75 * Math.sin(i * TAU / 17) * (1 - e);
+      x += step * Math.cos(ang); y += step * Math.sin(ang); pts.push([x, y]);
     }
     var mx = 0, my = 0; pts.forEach(function (p) { mx += p[0]; my += p[1]; }); mx /= n; my /= n;
     return pts.map(function (p) { return [p[0] - mx + cx, p[1] - my + cy]; });
@@ -165,7 +213,7 @@
   var KINDS1 = [], KINDS2 = [];
   (function () { var R = D.rng(23), S = D.rng(77); for (var i = 0; i < 34; i++) { KINDS1.push(Math.floor(R() * 20)); KINDS2.push(Math.floor(S() * 20)); } })();
   var FOLD1 = foldOf(5, 34, .55, 1.5), FOLD2 = foldOf(19, 34, 1.5, .5);
-  global.MolShapes = { POLY: POLY, drawPoly: drawPoly, polyVia: polyVia, foldOf: foldOf, chainAt: chainAt, drawChain: drawChain, KINDS1: KINDS1, KINDS2: KINDS2, FOLD1: FOLD1, FOLD2: FOLD2 };
+  global.MolShapes = { POLY: POLY, drawPoly: drawPoly, polyVia: polyVia, boxOf: boxOf, drawBox: drawBox, polyBox: polyBox, foldOf: foldOf, chainAt: chainAt, drawChain: drawChain, KINDS1: KINDS1, KINDS2: KINDS2, FOLD1: FOLD1, FOLD2: FOLD2 };
 
   /* ==================================================================================== 1. from a chain to its atoms */
   L.add('atomsfilm', Film({
@@ -181,8 +229,11 @@
       { t: 14, still: 20.6, h: 'Three elements', p: [['ig', 'Glucose contains **carbon**, **hydrogen** and **oxygen**: 6 carbon, 12 hydrogen and 6 oxygen atoms.'], ['ib', 'Its formula is C₆H₁₂O₆.']] }   /* IB B1.1.4 */
     ],
     make: function () {
-      var W = 560, H = 330, M = D.MODELS.glucose, r0 = 13, sp = 37, n = 19, mid = 9, ROT = -.12;
-      function ringAt(i) { return [W / 2 + (i - mid) * sp, H / 2 + Math.sin((i - mid) * .5) * 20]; }
+      var W = 560, H = 400, M = D.MODELS.glucose, r0 = 13, sp = 37, n = 19, mid = 9;
+      /* each ring's carbon 1 faces the ring before it and its carbon 4 the ring after it */
+      function posAt(i) { return [W / 2 + (i - mid) * sp, H / 2 + Math.sin((i - mid) * .5) * 20]; }
+      function ringAt(i) { var p = posAt(i), a = posAt(i - 1), b = posAt(i + 1); return { x: p[0], y: p[1], rot: Math.atan2(b[1] - a[1], b[0] - a[0]) + Math.PI }; }
+      var ROT = ringAt(mid).rot;
       function elAt(t) { return t < 14 ? null : t < 16.4 ? 'C' : t < 18.6 ? 'H' : 'O'; }
       return scene(W, H, {
         draw: function (c, t) {
@@ -190,14 +241,14 @@
           if (rFade > 0) {
             c.save(); c.translate(W / 2, H / 2); c.scale(z, z); c.translate(-W / 2, -H / 2);
             var others = 1 - seg(t, 5.5, 8);
-            for (var i = 0; i < n - 1; i++) { var a = ringAt(i), b = ringAt(i + 1); D.link(c, a[0], a[1], b[0], b[1], 4, rFade * ((i === mid || i === mid - 1) ? Math.max(others, .45) : Math.max(others, .25))); }
-            for (var j = 0; j < n; j++) { var p = ringAt(j); D.glc(c, p[0], p[1], r0, ROT, rFade * (j === mid ? 1 : Math.max(others, .28)), j === mid && t >= 4); }
+            for (var i = 0; i < n - 1; i++) { D.joinLink(c, ringAt(i), ringAt(i + 1), r0, 'c', 3.4, rFade * ((i === mid || i === mid - 1) ? Math.max(others, .45) : Math.max(others, .25))); }
+            for (var j = 0; j < n; j++) { var p = ringAt(j); D.glc(c, p.x, p.y, r0, p.rot, rFade * (j === mid ? 1 : Math.max(others, .28)), j === mid && t >= 4); }
             c.restore();
           }
           if (mFade > 0) {
             /* the model is turned so that its ring and its one oxygen lie where the flat ring's lie */
             var s = 13 * 4.5 / 1.43 * (.82 + .18 * mFade);
-            D.model(c, M, W / 2, H / 2 + 4, s * .9, { roll: 1.97, yaw: .1, pitch: -.42, only: elAt(t), alpha: mFade });
+            D.model(c, M, W / 2, H / 2 + 4, s * 1.08, { roll: ROT, yaw: -.56, pitch: -.32, only: elAt(t), alpha: mFade });
           }
         },
         labels: function (t) {
@@ -237,13 +288,19 @@
         if (t < 23) return [POLY.starch, POLY.glycogen, seg(t, 16.8, 21.1)];
         return [POLY.glycogen, POLY.cellulose, seg(t, 23.3, 27.6)];
       }
+      /* the molecule that has finished forming: its layout, the moment it finished, its name */
+      function whole(t) {
+        return t >= 14.6 && t < 16.5 ? [POLY.starch, 14.6, 'starch'] : t >= 21.1 && t < 23 ? [POLY.glycogen, 21.1, 'glycogen'] : t >= 27.6 ? [POLY.cellulose, 27.6, 'cellulose'] : null;
+      }
       return scene(W, H, {
-        draw: function (c, t, amb) { var q = now(t); polyVia(c, q[0], q[1], q[2], amb + t); },
+        draw: function (c, t, amb) {
+          var q = now(t), w = whole(t); polyVia(c, q[0], q[1], q[2], amb + t);
+          if (w) drawBox(c, polyBox(w[0]), clamp((t - w[1]) / .4));
+        },
         labels: function (t) {
-          if (t >= 14.6 && t < 16.5) return [{ id: 's', text: 'starch', x: POLY.starch.p[14][0], y: POLY.starch.p[14][1] - 8, side: 'T' }];
-          if (t >= 21.1 && t < 23) { var g = POLY.glycogen.p[POLY.glycogen.tip]; return [{ id: 'g', text: 'glycogen', x: g[0], y: g[1] - 6, side: 'T' }]; }
-          if (t >= 27.6) return [{ id: 'c', text: 'cellulose', x: POLY.cellulose.p[5][0], y: POLY.cellulose.p[5][1] - 8, side: 'T' }];
-          return [];
+          var w = whole(t); if (!w) return [];
+          var b = polyBox(w[0]);
+          return [{ id: w[2], text: w[2], x: b.cx, y: b.y, side: 'T' }];
         }
       });
     }
@@ -258,7 +315,7 @@
   L.add('fatfilm', Film({
     title: 'One glycerol and three fatty acids',
     aria: 'A glycerol molecule and three fatty acid molecules. Each fatty acid moves in and joins the glycerol, one at a time, and they make one fat molecule.',
-    key: [['glycerol', 'glycerol'], ['fatty', 'fatty acid'], ['atO', 'acid end of a fatty acid'], ['water', 'water released (IB)', [1]]],
+    key: [['glycerol', 'glycerol'], ['joinpt', 'place where a fatty acid joins', [0]], ['fatty', 'fatty acid'], ['atO', 'acid end of a fatty acid'], ['water', 'water released (IB)', [1]]],
     M: [0, 4.5, 11, 17],
     steps: [
       { t: 0, still: 4.2, h: 'The two kinds of small molecule', p: [['ig', 'A fat or an oil is made from two kinds of smaller molecule: **glycerol** and **fatty acids**.']] },
@@ -266,17 +323,18 @@
       { t: 11, still: 16.6, h: 'One fat molecule', p: [['ig', 'The result is one molecule of **fat** (or oil). Fats and oils contain carbon, hydrogen and oxygen.'], ['bey', 'Chemists call this molecule a triglyceride.']] }
     ],
     make: function () {
-      var W = 560, H = 330, gx = 168, gy = H / 2, gh = 158, gw = 30, ys = [gy - 56, gy, gy + 56], n = 15, step = 17;
-      var starts = [[262, 66, -.12], [280, 165, .03], [262, 264, .12]];
+      var W = 560, H = 400, gx = 136, gy = H / 2, gh = 214, gw = 36, ys = [gy - 76, gy, gy + 76], n = 15, step = 18;
+      var starts = [[256, 72, -.1], [268, 200, .03], [256, 328, .1]];
       return scene(W, H, {
         draw: function (c, t, amb) {
-          D.glycerolBar(c, gx, gy, gh, gw);
+          /* glycerol's three joining places: each shows until its fatty acid has arrived */
+          D.glycerolBar(c, gx, gy, gh, gw, null, ys.filter(function (y, q) { return t < 4.7 + q * 1.8 + 1.8; }));
           for (var i = 0; i < 3; i++) {
             var a = 4.7 + i * 1.8, k = ease(seg(t, a, a + 1.8)), s = starts[i];
             var bob = (1 - k) * Math.sin(amb * .7 + i * 2) * 3;
             var x0 = lerp(s[0], gx + gw / 2 + 3, k), y0 = lerp(s[1] + bob, ys[i], k), ang = lerp(s[2], 0, k);
-            D.tail(c, D.tailPts(x0, y0, ang, n, step, 0), 5.5);
-            D.ball(c, x0, y0, 6.4, C.O);
+            D.tail(c, D.tailPts(x0, y0, ang, n, step, 0), 6);
+            D.ball(c, x0, y0, 7, C.O);
             if (k >= 1 && t < a + 2.5) {
               var u = seg(t, a + 1.8, a + 2.5);
               c.strokeStyle = 'rgba(255,240,190,' + (1 - u).toFixed(3) + ')'; c.lineWidth = 2.4;
@@ -284,19 +342,19 @@
             }
             /* the water that each join releases, leaving the join */
             var wT = seg(t, a + 1.7, a + 2.7);
-            if (wT > 0 && wT < 1) h2o(c, x0 + 16 + 26 * wT, y0 - 14 - 12 * wT, Math.sin(wT * Math.PI));
+            if (wT > 0) h2o(c, x0 + 16 + 26 * wT, y0 - 14 - 12 * wT, seg(wT, 0, .3) * (1 - seg(t, 11, 11.4)));
           }
           if (t > 11.4) {
             var o = seg(t, 11.4, 12.4);
             c.strokeStyle = 'rgba(255,233,179,' + (.8 * o).toFixed(3) + ')'; c.lineWidth = 1.8; c.setLineDash([6, 5]);
-            D.rr(c, gx - 28, gy - gh / 2 - 16, 330, gh + 32, 16); c.stroke(); c.setLineDash([]);
+            D.rr(c, gx - 30, gy - gh / 2 - 16, 348, gh + 32, 16); c.stroke(); c.setLineDash([]);
           }
         },
         labels: function (t) {
           var it = [];
           if (t < 11.4) it.push({ id: 'g', text: 'glycerol', x: gx, y: gy - gh / 2 + 4, side: 'T' });
           if (t < 4.7) it.push({ id: 'f', text: 'fatty acid', x: starts[0][0] + 90, y: starts[0][1] - 12, side: 'T' });
-          if (t >= 11.4) it.push({ id: 'one', text: 'one fat molecule', x: gx + 137, y: gy - gh / 2 - 15, side: 'T' });
+          if (t >= 11.4) it.push({ id: 'one', text: 'one fat molecule', x: gx + 144, y: gy - gh / 2 - 15, side: 'T' });
           return it;
         }
       });
@@ -316,7 +374,7 @@
       { t: 17.5, still: 24.6, h: 'A different sequence', p: [['ig', 'A different **sequence** (order) of amino acids makes a **different protein**, with a different shape.']] }
     ],
     make: function () {
-      var W = 560, H = 330, n = 34, step = 15.2, r = 7;
+      var W = 560, H = 400, n = 34, step = 18, r = 8.4;
       var R = D.rng(9), free = [];
       for (var i = 0; i < n; i++) free.push([38 + R() * (W - 76), 34 + R() * (H - 68)]);
       function pos(F, k, cx) { return chainAt(F, n, cx == null ? W / 2 : cx, H / 2, step, k); }
@@ -338,24 +396,28 @@
             pts.forEach(function (p, j) { D.bead(c, p[0], p[1], r, KINDS1[j]); });
           } else if (t < 17.5) {
             drawChain(c, pos(FOLD1, ease(seg(t, 11.3, 16.6))), KINDS1, r);
+            if (t >= 16.6) drawBox(c, boxOf(pos(FOLD1, 1), r + 8), clamp((t - 16.6) / .4));
           } else {
             /* the first protein stays in view, so the two shapes can be compared */
             var mv = ease(seg(t, 17.7, 19.2));
             drawChain(c, pos(FOLD1, 1, lerp(W / 2, W * .27, mv)), KINDS1, r);
             /* the second chain joins along the foot of the picture, where its own sequence can be seen, and then folds */
             if (t >= 19.4) {
-              var fk = ease(seg(t, 21.3, 24.2)), cx2 = lerp(W / 2, W * .73, fk), cy2 = lerp(H - 44, H / 2, fk);
+              var fk = ease(seg(t, 21.3, 24.2)), cx2 = lerp(W / 2, W * .73, fk), cy2 = lerp(H - 62, H / 2, fk);
               drawChain(c, chainAt(FOLD2, n, cx2, cy2, step, fk), KINDS2, r, 1, 1 + seg(t, 19.4, 21.2) * (n - 1));
+            }
+            if (t >= 24.2) {
+              var ba = clamp((t - 24.2) / .4);
+              drawBox(c, boxOf(chainAt(FOLD1, n, W * .27, H / 2, step, 1), r + 8), ba); drawBox(c, boxOf(chainAt(FOLD2, n, W * .73, H / 2, step, 1), r + 8), ba);
             }
           }
         },
         labels: function (t) {
           if (t < 4.6) return [{ id: 'a', text: 'one amino acid', x: free[4][0], y: free[4][1] - 7, side: 'T' }];
-          if (t >= 16.2 && t < 17.7) return [{ id: 'p', text: 'one protein', x: W / 2, y: H / 2 - 46, side: 'T' }];
+          if (t >= 16.6 && t < 17.5) { var b0 = boxOf(pos(FOLD1, 1), r + 8); return [{ id: 'p', text: 'one protein', x: b0.cx, y: b0.y, side: 'T' }]; }
           if (t >= 24.2) {
-            var topOf = function (F, cx) { var b = chainAt(F, n, cx, H / 2, step, 1)[0], q = chainAt(F, n, cx, H / 2, step, 1); q.forEach(function (p) { if (p[1] < b[1]) b = p; }); return b; };
-            var a1 = topOf(FOLD1, W * .27), a2 = topOf(FOLD2, W * .73);
-            return [{ id: 'p1', text: 'one protein', x: a1[0], y: a1[1] - 6, side: 'T' }, { id: 'p2', text: 'a different protein', x: a2[0], y: a2[1] - 6, side: 'T' }];
+            var b1 = boxOf(chainAt(FOLD1, n, W * .27, H / 2, step, 1), r + 8), b2 = boxOf(chainAt(FOLD2, n, W * .73, H / 2, step, 1), r + 8);
+            return [{ id: 'p1', text: 'one protein', x: b1.cx, y: b1.y, side: 'T' }, { id: 'p2', text: 'a different protein', x: b2.cx, y: b2.y, side: 'T' }];
           }
           return [];
         }
@@ -377,13 +439,13 @@
       { t: 16, still: 22.6, h: 'A double helix', p: [['ig', 'The two strands are **coiled** together to form a **double helix**.']] }
     ],
     make: function () {
-      var W = 560, H = 330, n = DNA_SEQ.length;
+      var W = 560, H = 400, n = DNA_SEQ.length;
       function geo(t) { var tw = ease(seg(t, 16.3, 21.6)), g = D.dnaGeom(tw); g.tw = tw; g.x0 = W / 2 - (n - 1) * g.dx / 2; return g; }
       return scene(W, H, {
         draw: function (c, t) {
           var sec = seg(t, 4.8, 9.6), g = geo(t);
           c.save(); c.translate(W / 2, H / 2); c.scale(g.cam, g.cam); c.translate(-W / 2, -H / 2);
-          D.helix(c, { seq: DNA_SEQ, x0: g.x0, y: H / 2, dx: g.dx, R: g.R, w: 6 / g.cam, cam: g.cam, twist: g.tw, turn: g.tw * .55, second: t < 4.8 ? 0 : sec, secondOff: 110,
+          D.helix(c, { seq: DNA_SEQ, x0: g.x0, y: H / 2, dx: g.dx, R: g.R, w: 6 / g.cam, cam: g.cam, twist: g.tw, turn: g.tw * .55, second: t < 4.8 ? 0 : sec, secondOff: 130,
                        show: { bonds: t >= 11.2, letters: g.tw < .32 }, bondAlpha: seg(t, 11.2, 12.6) * .95 });
           c.restore();
         },
@@ -429,10 +491,11 @@
   function funnelFlask(c, x, y, level, res, fill, drip) {
     c.beginPath(); c.moveTo(x - 9, y + 54); c.lineTo(x - 9, y + 74); c.lineTo(x - 44, y + 136); c.quadraticCurveTo(x, y + 142, x + 44, y + 136); c.lineTo(x + 9, y + 74); c.lineTo(x + 9, y + 54);
     c.save(); c.closePath(); c.fillStyle = 'rgba(190,220,240,.08)'; c.fill(); c.clip();
-    c.fillStyle = 'rgba(229,223,194,.42)'; c.fillRect(x - 50, y + 140 - 16 * fill, 100, 16 * fill + 4); c.restore();
+    c.fillStyle = 'rgba(240,235,205,.26)'; c.fillRect(x - 50, y + 140 - 16 * fill, 100, 16 * fill + 4); c.restore();
     c.beginPath(); c.moveTo(x - 9, y + 54); c.lineTo(x - 9, y + 74); c.lineTo(x - 44, y + 136); c.quadraticCurveTo(x, y + 142, x + 44, y + 136); c.lineTo(x + 9, y + 74); c.lineTo(x + 9, y + 54);
     c.strokeStyle = C.glass; c.lineWidth = 1.8; c.stroke();
-    c.beginPath(); c.moveTo(x - 50, y - 16); c.lineTo(x - 5, y + 38); c.lineTo(x - 4, y + 68); c.lineTo(x + 4, y + 68); c.lineTo(x + 5, y + 38); c.lineTo(x + 50, y - 16); c.strokeStyle = C.glass; c.lineWidth = 1.9; c.stroke();
+    /* the stem is open at its tip, so the filtrate can leave */
+    c.beginPath(); c.moveTo(x - 50, y - 16); c.lineTo(x - 5, y + 38); c.lineTo(x - 4, y + 68); c.moveTo(x + 4, y + 68); c.lineTo(x + 5, y + 38); c.lineTo(x + 50, y - 16); c.strokeStyle = C.glass; c.lineWidth = 1.9; c.stroke();
     c.beginPath(); c.moveTo(x - 43, y - 12); c.lineTo(x, y + 36); c.lineTo(x + 43, y - 12); c.closePath(); c.fillStyle = '#F4F2E7'; c.fill(); c.strokeStyle = '#B9B28F'; c.lineWidth = 1; c.stroke();
     if (level > 0) {
       var yl = lerp(y + 30, y - 6, level), hw = 43 * (y + 36 - yl) / 48;
@@ -455,7 +518,7 @@
       { t: 17, still: 23.2, h: 'Label the tubes', p: [['ig', 'Use **labelled test tubes**, one for each test. Starch, fats and many proteins stay on the filter paper, so test for starch and protein with the **unfiltered** mixture, and for fats with a fresh, **dry** piece of food.']] }
     ],
     make: function () {
-      var W = 560, H = 330;
+      var W = 560, H = 420, TY = 94, TH = 246, TW = 50;
       return scene(W, H, {
         draw: function (c, t, amb) {
           /* one picture leaves before the next arrives: two pictures are never laid over each other */
@@ -463,7 +526,7 @@
           if (fade1 > 0) {
             c.globalAlpha = fade1;
             var gr = seg(t, .6, 5.4), wat = seg(t, 6.5, 8.4), stir = t >= 8.4 && t < 10.8 ? 1 : 0;
-            c.save(); c.translate(W / 2, 190); c.scale(1.5, 1.5); c.translate(-W / 2, -190);
+            c.save(); c.translate(W / 2, 222); c.scale(1.95, 1.95); c.translate(-W / 2, -167);
             mortar(c, W / 2, 184, gr, stir, wat, t);
             if (t >= 6 && t < 8.8) {
               var po = seg(t, 6, 6.5) * (1 - seg(t, 8.3, 8.8));
@@ -481,28 +544,28 @@
           if (fade2 > 0) {
             c.globalAlpha = fade2;
             var fl = seg(t, 11.8, 16.2);
-            c.save(); c.translate(W / 2, 165); c.scale(1.45, 1.45); c.translate(-W / 2, -148);
+            c.save(); c.translate(W / 2, H / 2 + 4); c.scale(2.1, 2.1); c.translate(-W / 2, -141);
             funnelFlask(c, W / 2, 78, 1 - fl, fl, fl, t > 11.8 && t < 16.2 ? (amb * 1.3 + t * 1.3) % 1 : null);
             c.restore();
             c.globalAlpha = 1;
           }
           if (fade3 > 0) {
             c.globalAlpha = fade3;
-            var xs = [120, 200, 280, 360, 440], names = ['iodine', 'Benedict’s', 'biuret', 'ethanol', 'DCPIP'];
-            D.rack(c, 86, 474, 158, 96);
+            var xs = [88, 184, 280, 376, 472], names = ['iodine', 'Benedict’s', 'biuret', 'ethanol', 'DCPIP'];
+            D.rack(c, 36, 524, TY + TH * .44, TH * .6);
             xs.forEach(function (x, i) {
               var k = seg(t, 18 + i * .8, 18.8 + i * .8), dry = i === 3, unf = i === 0 || i === 2;
-              D.tube(c, x, 96, 34, 150, dry ? null : { col: unf ? '#D9D2B3' : 'rgba(229,223,194,.42)', level: .46 * k + .001, cloud: unf ? .45 : 0, bits: unf && k > .5 ? 12 : 0, bitsCol: 'rgba(120,100,60,.55)' });
-              if (dry && k > 0) { c.fillStyle = '#D6C99F'; [[-7, 238], [4, 240], [-1, 233]].forEach(function (q) { c.beginPath(); c.arc(x + q[0], q[1] - 3 + (1 - k) * -30, 4.4, 0, TAU); c.fill(); }); }
-              c.fillStyle = '#F4F7FA'; D.rr(c, x - 33, 66, 66, 19, 4); c.fill();
-              c.fillStyle = '#10202E'; c.font = '600 10.5px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(names[i], x, 76);
+              D.tube(c, x, TY, TW, TH, dry ? null : { col: unf ? '#D9D2B3' : 'rgba(240,235,205,.26)', level: .46 * k + .001, cloud: unf ? .45 : 0, bits: unf && k > .5 ? 12 : 0, bitsCol: 'rgba(120,100,60,.55)' });
+              if (dry && k > 0) { c.fillStyle = '#D6C99F'; [[-10, -13], [8, -11], [-1, -21]].forEach(function (q) { c.beginPath(); c.arc(x + q[0], TY + TH + q[1] + (1 - k) * -40, 6.6, 0, TAU); c.fill(); }); }
+              c.fillStyle = '#F4F7FA'; D.rr(c, x - 44, TY - 32, 88, 24, 5); c.fill();
+              c.fillStyle = '#10202E'; c.font = '600 13px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(names[i], x, TY - 19.5);
             });
             c.globalAlpha = 1;
           }
         },
         labels: function (t) {
-          if (t < 6) return [{ id: 'm', text: 'mortar', x: W / 2 - 56, y: 246, side: 'B' }, { id: 'p', text: 'pestle', x: W / 2 + 62 + (t > .6 && t < 5.4 ? Math.sin(t * 5) * 21 : 0), y: 74, side: 'T' }];
-          if (t >= 12.2 && t < 17) { var fl = [{ id: 'fp', text: 'filter paper', x: W / 2 - 40, y: 50, side: 'T' }]; if (t >= 13.5) fl.push({ id: 'ft', text: 'filtrate', x: W / 2, y: 258, side: 'B' }); return fl; }
+          if (t < 6) return [{ id: 'm', text: 'mortar', x: W / 2 - 78, y: 335, side: 'B' }, { id: 'p', text: 'pestle', x: W / 2 + 92 + (t > .6 && t < 5.4 ? Math.sin(t * 5) * 27 : 0), y: 88, side: 'T' }];
+          if (t >= 12.2 && t < 17) { var fl = [{ id: 'fp', text: 'filter paper', x: W / 2 - 52, y: 76, side: 'T' }]; if (t >= 13.5) { fl.push({ id: 'ft', text: 'filtrate', x: W / 2, y: 354, side: 'B' }); fl.push({ id: 'sp', text: 'solid pieces', x: W / 2 + 17, y: 134, side: 'T' }); } return fl; }
           return [];
         }
       });
@@ -531,19 +594,19 @@
     c.fillStyle = '#10202E'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, x, y + 10.5);
   }
   function twoTubes(cfg) {
-    var W = 560, H = 330, X1 = 196, X2 = 364, Y = 84, TW = 50, TH = 150, RY = 170;
+    var W = 560, H = 420, X1 = 170, X2 = 390, Y = 84, TW = 78, TH = 226, RY = 213, BY = 176, BH = 176, BW = 460;
     return function () {
       return scene(W, H, {
         draw: function (c, t, amb) {
           D.tile(c, 40, 8, W - 80, H - 16); D.setLight(true);
           var st = cfg.state(t), dy = st.dy || 0, shake = st.shake ? Math.sin(t * 22) * 3 * st.shake : 0, bA = st.bathA || 0;
-          if (bA < 1) { c.globalAlpha = 1 - bA; D.rack(c, X1 - 54, X2 + 54, RY, 76); c.globalAlpha = 1; }
+          if (bA < 1) { c.globalAlpha = 1 - bA; D.rack(c, X1 - 86, X2 + 86, RY, 107); c.globalAlpha = 1; }
           var pa = dropperAt(t, cfg.addAt, X1, X2);
-          if (bA > 0) { c.globalAlpha = bA; D.bath(c, W / 2, 146, 340, 118, st.bath, amb + t); c.globalAlpha = 1; }
+          if (bA > 0) { c.globalAlpha = bA; D.bath(c, W / 2, BY, BW, BH, st.bath, amb + t); c.globalAlpha = 1; }
           D.tube(c, X1 + shake, Y + dy, TW, TH, T.liquid(cfg.test, cfg.food, st.a1, st.d1, st.level));
           D.tube(c, X2 + shake, Y + dy, TW, TH, T.liquid(cfg.test, 'water', st.a2, st.d2, st.level));
-          if (bA > 0) { c.fillStyle = 'rgba(127,196,236,' + (.2 * bA).toFixed(3) + ')'; c.fillRect(W / 2 - 170, 146 + 118 * .24, 340, 118 * .76); }
-          tag(c, X1, 288, cfg.tagA ? cfg.tagA(t) : cfg.foodName); tag(c, X2, 288, cfg.tagB ? cfg.tagB(t) : 'water (control)');
+          if (bA > 0) { c.fillStyle = 'rgba(127,196,236,' + (.07 * bA).toFixed(3) + ')'; c.fillRect(W / 2 - BW / 2, BY + BH * .24, BW, BH * .76); }
+          tag(c, X1, 378, cfg.tagA ? cfg.tagA(t) : cfg.foodName); tag(c, X2, 378, cfg.tagB ? cfg.tagB(t) : 'water (control)');
           if (pa) {
             var col2 = cfg.reagentCol2 || cfg.reagentCol, col = pa.x > (X1 + X2) / 2 && t > cfg.addAt + 2.8 ? col2 : cfg.reagentCol;
             D.dropper(c, pa.x, pa.y, col, pa.sq);
@@ -592,7 +655,7 @@
       test: 'benedict', food: 'honey', foodName: 'honey in water', reagentCol: C.ben[0], addAt: 4,
       state: function (t) {
         var inb = ease(seg(t, 10.3, 11.9)) * (1 - ease(seg(t, 18.2, 19.8)));
-        return { a1: seg(t, 5.2, 6.4), a2: seg(t, 7.4, 8.6), d1: seg(t, 12, 17.8), d2: 0, dy: inb * 26, bathA: clamp(seg(t, 10, 10.8) * (1 - seg(t, 19.2, 20.2))), bath: clamp(seg(t, 10.8, 11.6) * (1 - seg(t, 18, 18.8))) };
+        return { a1: seg(t, 5.2, 6.4), a2: seg(t, 7.4, 8.6), d1: seg(t, 12, 17.8), d2: 0, dy: inb * 30, bathA: clamp(seg(t, 10, 10.8) * (1 - seg(t, 19.2, 20.2))), bath: clamp(seg(t, 10.8, 11.6) * (1 - seg(t, 18, 18.8))) };
       },
       /* the five colours, with a marker that moves along them to the colour of this food */
       overlay: function (c, t) {
@@ -600,12 +663,12 @@
         c.globalAlpha = a;
         var names = ['blue', 'green', 'yellow', 'orange', 'brick red'], bw = 74, x0 = 280 - bw * 2.5, y0 = 22;
         names.forEach(function (n, i) {
-          c.fillStyle = C.ben[i]; D.rr(c, x0 + i * bw + 2, y0, bw - 4, 18, 4); c.fill();
-          c.fillStyle = i === 2 ? '#10202E' : '#FFFFFF'; c.font = '600 10.5px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-          c.fillText(n, x0 + (i + .5) * bw, y0 + 9.5);
+          c.fillStyle = C.ben[i]; D.rr(c, x0 + i * bw + 2, y0, bw - 4, 21, 4); c.fill();
+          c.fillStyle = i === 2 ? '#10202E' : '#FFFFFF'; c.font = '600 12px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+          c.fillText(n, x0 + (i + .5) * bw, y0 + 11);
         });
         var m = x0 + 4.5 * bw;
-        c.fillStyle = '#10202E'; c.beginPath(); c.moveTo(m, y0 + 21); c.lineTo(m - 7, y0 + 32); c.lineTo(m + 7, y0 + 32); c.closePath(); c.fill();
+        c.fillStyle = '#10202E'; c.beginPath(); c.moveTo(m, y0 + 24); c.lineTo(m - 7, y0 + 35); c.lineTo(m + 7, y0 + 35); c.closePath(); c.fill();
         c.globalAlpha = 1;
       }
     })
@@ -653,8 +716,8 @@
       { t: 14, still: 20.8, h: 'Pour into water', p: [['ig', 'Pour the liquid from each tube into a clean tube of **water**.']] },
       { t: 21, still: 26.8, h: 'Observe the result', p: [['ig', 'A **cloudy white emulsion** shows that a **fat or oil** is present. The control stays clear.'], ['bey', 'Fats and oils do not dissolve in water, so they form tiny droplets.']] }
     ],
-    make: function () {
-      var W = 560, H = 330, X = [112, 214, 346, 448], Y = 112, TW = 42, TH = 140, TILT = 1.85;
+    make: (global.MolShapes.emulsion = function () {
+      var W = 560, H = 420, X = [100, 216, 344, 460], Y = 128, TW = 56, TH = 196, TILT = 1.85;
       function pourK(i, t) { var from = i === 0 ? 14.7 : 17.4; return ease(seg(t, from, from + .7)) * (1 - ease(seg(t, from + 2.3, from + 3))); }
       function drained(i, t) { var from = i === 0 ? 15.4 : 18.1; return seg(t, from, from + 1.5); }
       function liq(i, t) {
@@ -672,7 +735,7 @@
       }
       return scene(W, H, {
         draw: function (c, t) {
-          D.rack(c, 66, 494, 196, 76);
+          D.rack(c, 40, 520, Y + TH * .6, 92);
           var sh = t >= 9.3 && t < 13 ? Math.sin(t * 22) * 3.5 : 0, wA = seg(t, 14, 14.6);
           /* the clean water tubes are brought in for the fourth step */
           [1, 3].forEach(function (i) { if (wA > 0) { c.globalAlpha = wA; D.tube(c, X[i], Y + (1 - wA) * 14, TW, TH, liq(i, t)); c.globalAlpha = 1; } });
@@ -685,18 +748,18 @@
             var dr = drained(i, t);
             if (k > .92 && dr > 0 && dr < 1) {
               var mx = x + Math.sin(tilt) * TH / 2, my = y + TH / 2 - Math.cos(tilt) * TH / 2;
-              c.strokeStyle = i === 0 ? '#EFE4BF' : 'rgba(200,226,242,.9)'; c.lineWidth = 3; c.lineCap = 'round';
+              c.strokeStyle = i === 0 ? '#EFE4BF' : 'rgba(200,226,242,.9)'; c.lineWidth = 4; c.lineCap = 'round';
               c.beginPath(); c.moveTo(mx + 2, my + 8); c.quadraticCurveTo(X[i + 1] + 3, my + 26, X[i + 1], Y + TH * (1 - .34 - .28 * dr)); c.stroke();
             }
           });
           var m = seg(t, 14, 14.6);
-          tag(c, lerp(X[0], (X[0] + X[1]) / 2, m), 284, 'sesame oil');
-          tag(c, lerp(X[2], (X[2] + X[3]) / 2, m), 284, 'water (control)');
+          tag(c, lerp(X[0], (X[0] + X[1]) / 2, m), 366, 'sesame oil');
+          tag(c, lerp(X[2], (X[2] + X[3]) / 2, m), 366, 'water (control)');
           var pa = t >= 4 && t < 9 ? (t < 4.9 ? lerp(X[0] + 170, X[0], ease(seg(t, 4, 4.9))) : t < 6.2 ? X[0] : t < 6.6 ? lerp(X[0], X[2], ease(seg(t, 6.2, 6.6))) : t < 7.9 ? X[2] : lerp(X[2], X[2] + 180, ease(seg(t, 7.9, 8.7)))) : null;
           if (pa != null) {
-            D.dropper(c, pa, 92, C.ethanol, (t > 5 && t < 6.2) || (t > 6.7 && t < 7.8) ? Math.abs(Math.sin(t * 8)) : 0);
-            if (Math.abs(pa - X[0]) < 1) dropsIn(c, t, 5, X[0], 98, Y + TH * .78, C.ethanol);
-            if (Math.abs(pa - X[2]) < 1) dropsIn(c, t, 6.7, X[2], 98, Y + TH * .78, C.ethanol);
+            D.dropper(c, pa, Y - 20, C.ethanol, (t > 5 && t < 6.2) || (t > 6.7 && t < 7.8) ? Math.abs(Math.sin(t * 8)) : 0);
+            if (Math.abs(pa - X[0]) < 1) dropsIn(c, t, 5, X[0], Y - 14, Y + TH * .78, C.ethanol);
+            if (Math.abs(pa - X[2]) < 1) dropsIn(c, t, 6.7, X[2], Y - 14, Y + TH * .78, C.ethanol);
           }
         },
         labels: function (t) {
@@ -707,6 +770,6 @@
           return it;
         }
       });
-    }
+    })
   }));
 })(window);

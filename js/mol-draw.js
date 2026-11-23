@@ -40,7 +40,7 @@
     /* glass and the bench */
     glass: 'rgba(214,236,250,.62)', glassHi: 'rgba(255,255,255,.65)', bench0: '#1B3147', bench1: '#12222F', wood: '#4A3A2B',
     /* the food tests: the same colours as the Digestion Lab's bench */
-    water: '#E6F2F8', clear: '#27405A', iodine: '#C77B34', blueBlack: '#21203A', ben: ['#3E6FA8', '#4E9A6A', '#C9B23A', '#D98F2E', '#B6412A'], biuret: '#4F86C6', purple: '#7A3FA8',
+    water: '#E6F2F8', clear: '#1C3349', iodine: '#C77B34', blueBlack: '#21203A', ben: ['#3E6FA8', '#4E9A6A', '#C9B23A', '#D98F2E', '#B6412A'], biuret: '#4F86C6', purple: '#7A3FA8',
     dcpip: '#2F6FD0', ethanol: '#E8F1F7', cloud: '#F4F6F8', oil: '#E6C25A'
   };
   /* twenty kinds of amino acid, each one colour, kept clear of the extension violet */
@@ -221,8 +221,13 @@
   }
 
   /* ======================================================================= the building blocks, drawn flat */
-  /* one glucose: the Membrane Lab's amber ring with its one oxygen */
-  function glc(c, x, y, r, rot, alpha, hi) {
+  /* one glucose, as its ring. The corners are the real atoms, in their real order: carbon 1 at the angle `rot`, then the
+     ring's oxygen, carbon 5, carbon 4 (opposite carbon 1), carbon 3 and carbon 2. `flip` shows the ring from its other face. */
+  function ringAt(q, r, atom) {
+    var sg = q.flip ? 1 : -1, off = { C1: 0, O: 1, C5: 2, C4: 3 }[atom], a = q.rot + sg * off * TAU / 6;
+    return [q.x + r * Math.cos(a), q.y + r * Math.sin(a), a];
+  }
+  function glc(c, x, y, r, rot, alpha, hi, flip) {
     if (alpha != null) c.globalAlpha = alpha;
     c.beginPath();
     for (var i = 0; i < 6; i++) { var a = rot + i * TAU / 6; c[i ? 'lineTo' : 'moveTo'](x + r * Math.cos(a), y + r * Math.sin(a)); }
@@ -232,15 +237,28 @@
     c.fillStyle = rg; c.fill();
     c.lineJoin = 'round'; c.strokeStyle = C.sugarLo; c.lineWidth = r * .36; c.stroke();
     c.strokeStyle = C.sugar; c.lineWidth = r * .22; c.stroke();
-    var o = rot + TAU / 6;
-    ball(c, x + r * Math.cos(o), y + r * Math.sin(o), r * .2, C.O);
+    var o = ringAt({ x: x, y: y, rot: rot, flip: flip }, r, 'O');
+    ball(c, o[0], o[1], r * .2, C.O);
     if (alpha != null) c.globalAlpha = 1;
   }
-  /* the link between two glucose rings */
-  function link(c, x0, y0, x1, y1, w, alpha) {
+  /* the link between two glucose molecules, where it really is: from carbon 4 of one (`kind` 'c'), or at a branch from the
+     carbon 6 that stands out from its carbon 5 (`kind` 'b'), through one oxygen atom, to carbon 1 of the next. Never through a ring. */
+  function joinPoints(a, b, r, kind) {
+    var end = ringAt(b, r, 'C1'), from, stub = null;
+    if (kind === 'b') { var c5 = ringAt(a, r, 'C5'); stub = [c5[0], c5[1]]; from = [c5[0] + r * .8 * Math.cos(c5[2]), c5[1] + r * .8 * Math.sin(c5[2])]; }
+    else { var c4 = ringAt(a, r, 'C4'); from = [c4[0], c4[1]]; }
+    return { stub: stub, from: from, to: [end[0], end[1]], o: [(from[0] + end[0]) / 2, (from[1] + end[1]) / 2] };
+  }
+  function joinLink(c, a, b, r, kind, w, alpha) {
+    var q = joinPoints(a, b, r, kind);
     c.globalAlpha = alpha == null ? 1 : alpha;
-    c.lineCap = 'round'; c.strokeStyle = C.sugarLo; c.lineWidth = w + 1.4; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
-    c.strokeStyle = C.sugar; c.lineWidth = w; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    c.lineCap = 'round';
+    [[C.sugarLo, w + 1.2], [C.sugar, w]].forEach(function (t) {
+      c.strokeStyle = t[0]; c.lineWidth = t[1]; c.beginPath();
+      if (q.stub) { c.moveTo(q.stub[0], q.stub[1]); c.lineTo(q.from[0], q.from[1]); } else c.moveTo(q.from[0], q.from[1]);
+      c.lineTo(q.to[0], q.to[1]); c.stroke();
+    });
+    ball(c, q.o[0], q.o[1], Math.max(1.5, r * .24), C.O);
     c.globalAlpha = 1;
   }
   /* a fatty acid: a zigzag tail from (x, y) along angle `ang`; `kink` bends it after the middle (a C=C, in an oil) */
@@ -264,12 +282,16 @@
     c.globalAlpha = 1;
   }
   /* glycerol: an upright bar with its three joining places, at (x, y), height h */
-  function glycerolBar(c, x, y, h, w, alpha) {
+  function glycerolBar(c, x, y, h, w, alpha, places) {
     c.globalAlpha = alpha == null ? 1 : alpha;
     rr(c, x - w / 2, y - h / 2, w, h, w / 2.2);
     var lg = c.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
     lg.addColorStop(0, C.glycerol[0]); lg.addColorStop(.45, C.glycerol[1]); lg.addColorStop(1, C.glycerol[2]);
     c.fillStyle = lg; c.fill(); c.strokeStyle = 'rgba(70,38,12,.8)'; c.lineWidth = 1; c.stroke();
+    /* the three places on glycerol where a fatty acid joins */
+    (places || []).forEach(function (py) {
+      c.beginPath(); c.arc(x + w / 2, py, Math.max(3, w * .16), 0, TAU); c.fillStyle = '#FFF3D6'; c.fill(); c.strokeStyle = '#7A4720'; c.lineWidth = 1.2; c.stroke();
+    });
     c.globalAlpha = 1;
   }
   /* one amino acid: a bead in the colour of its kind */
@@ -295,15 +317,21 @@
       pts.push({ i: i, x: x0 + i * dx, y1: y0 - R * cs, z1: sn, y2: y0 + R * cs + off, z2: -sn, b: seq[i], p: PAIR[seq[i]], off: off, s: cs >= 0 ? 1 : -1 });
     }
     function strandPath(key, keyZ) {
-      for (var j = 0; j < n - 1; j++) {
-        var p = pts[j], q = pts[j + 1], z = (p[keyZ] + q[keyZ]) / 2;
-        items.push({ z: z, f: function (P, Q, zz) { return function () {
+      /* a strand is a smooth curve: each stretch between two bases is drawn in short pieces, each at its own depth */
+      var sg = key === 'y1' ? -1 : 1, SUB = 6;
+      function at(j, u) {
+        var f = j + u, a = base + tw * f * TAU / 10, cs = Math.cos(a), sn = Math.sin(a), off = sg > 0 ? lerp(pts[j].off, pts[j + 1].off, u) : 0;
+        return { x: x0 + f * dx, y: y0 + sg * R * cs + off, z: sg < 0 ? sn : -sn };
+      }
+      for (var j = 0; j < n - 1; j++) for (var m = 0; m < SUB; m++) {
+        var P0 = at(j, m / SUB), Q0 = at(j, (m + 1) / SUB);
+        items.push({ z: (P0.z + Q0.z) / 2, f: function (P, Q, zz) { return function () {
           var w = o.w * (.72 + .28 * (zz + 1) / 2);
           c.lineCap = 'round'; c.strokeStyle = C.strandLo; c.lineWidth = w + 1.6 / (o.cam || 1);
-          c.beginPath(); c.moveTo(P.x, P[key]); c.lineTo(Q.x, Q[key]); c.stroke();
+          c.beginPath(); c.moveTo(P.x, P.y); c.lineTo(Q.x, Q.y); c.stroke();
           c.strokeStyle = mixHex(C.strandLo, C.strand, .35 + .65 * (zz + 1) / 2); c.lineWidth = w;
-          c.beginPath(); c.moveTo(P.x, P[key]); c.lineTo(Q.x, Q[key]); c.stroke();
-        }; }(p, q, z) });
+          c.beginPath(); c.moveTo(P.x, P.y); c.lineTo(Q.x, Q.y); c.stroke();
+        }; }(P0, Q0, (P0.z + Q0.z) / 2) });
       }
     }
     strandPath('y1', 'z1');
@@ -341,7 +369,8 @@
   /* the true shape of DNA, whatever the twist: each strand keeps its length as it coils. A base pair is 2 nm wide and
      0.34 nm from the next; between neighbours a strand runs 0.71 nm. So when the flat ladder (30 px between pairs) coils,
      the pairs move to 14.4 px apart and the half-width stays 42 px, and the camera moves in to fill the picture. */
-  function dnaGeom(tw) { var dx = lerp(30, 14.4, tw); return { dx: dx, R: 42, cam: lerp(1, 2.02, tw) }; }
+  /* every length is multiplied by the same 8/7, so the picture has the column and the proportions stay true */
+  function dnaGeom(tw) { var Z = 8 / 7; return { dx: lerp(30, 14.4, tw) * Z, R: 42 * Z, cam: lerp(1, 2.02, tw) }; }
 
   /* ======================================================================= the bench
      A test tube at (x, y) = the middle of its mouth, w wide, h long. liq: { col, level 0…1, cloud 0…1, ppt 0…1 (a
@@ -451,7 +480,7 @@
     C: C, AA: AA, TAU: TAU, lerp: lerp, clamp: clamp, ease: ease, seg: seg, mixHex: mixHex, rgba: rgba, rng: rng,
     ball: ball, rr: rr, ground: ground, frame: frame, arrow: arrow,
     MODELS: MODELS, formula: formula, model: model, turn: turn,
-    glc: glc, link: link, tailPts: tailPts, tail: tail, glycerolBar: glycerolBar, bead: bead,
+    glc: glc, ringAt: ringAt, joinPoints: joinPoints, joinLink: joinLink, tailPts: tailPts, tail: tail, glycerolBar: glycerolBar, bead: bead,
     helix: helix, dnaGeom: dnaGeom, PAIR: PAIR, baseCol: baseCol, tile: tile, setLight: setLight,
     tube: tube, rack: rack, dropper: dropper, drop: drop, bath: bath
   };
