@@ -216,35 +216,12 @@
   }
 
   /* ======================================================================= a protein chain, in 3D
-     Daniel, 24 Nov 2026: "it's very important to understand that the protein [folds] into a 3D structure". The chain's beads lie
-     one step apart at every moment: folding turns each link from its place in the loose chain to its place in the folded chain,
-     so the chain never gets longer or shorter. It winds up from its far end, so the part not yet folded lies still (Inheritance
-     Lab, 6 Nov 2026). The folded chain is a compact walk on a cubic grid that never passes through itself, set at an angle so
-     that its depth can be seen from the front; the picture keeps still while it folds. */
-  var DIR6 = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-  function fold3Of(seed, n, w, set, cn) {
-    for (var tries = 0; tries < 800; tries++) {
-      var R = D.rng(seed + tries * 101), pts = [[0, 0, 0]], used = { '0,0,0': 1 }, dirs = [], ok = true;
-      for (var i = 1; i < n; i++) {
-        var p = pts[i - 1], cx = 0, cy = 0, cz = 0, best = -1, bs = 1e9;
-        pts.forEach(function (q) { cx += q[0]; cy += q[1]; cz += q[2]; }); cx /= pts.length; cy /= pts.length; cz /= pts.length;
-        for (var d = 0; d < 6; d++) {
-          if (dirs.length && d === (dirs[dirs.length - 1] ^ 1)) continue;
-          var x = p[0] + DIR6[d][0], y = p[1] + DIR6[d][1], z = p[2] + DIR6[d][2];
-          if (used[x + ',' + y + ',' + z]) continue;
-          var near = 0;
-          for (var e = 0; e < 6; e++) if (used[(x + DIR6[e][0]) + ',' + (y + DIR6[e][1]) + ',' + (z + DIR6[e][2])]) near++;
-          var sc = w[0] * (x - cx) * (x - cx) + w[1] * (y - cy) * (y - cy) + w[2] * (z - cz) * (z - cz) + R() * 4 + near * cn + (dirs.length && d === dirs[dirs.length - 1] ? -1.2 : 0);
-          if (sc < bs) { bs = sc; best = d; }
-        }
-        if (best < 0) { ok = false; break; }
-        var np = [p[0] + DIR6[best][0], p[1] + DIR6[best][1], p[2] + DIR6[best][2]];
-        used[np.join(',')] = 1; pts.push(np); dirs.push(best);
-      }
-      if (ok) return dirs.map(function (d) { return D.turn(DIR6[d], set[0], set[1], set[2]); });
-    }
-    throw new Error('no 3D fold found');
-  }
+     Daniel, 24 Nov 2026: "it's very important to understand that the protein [folds] into a 3D structure", and then: the folds
+     "look more like geometrical shapes rather than what a protein will look like". So each folded chain is a real one: a stretch of
+     30 amino acids of the measured amylase (below), in its own shape and with its own sequence. The chain's beads lie one step
+     apart at every moment: folding turns each link from its place in the loose chain to its place in the folded chain, so the chain
+     never gets longer or shorter. It winds up from its far end, so the part not yet folded lies still (Inheritance Lab, 6 Nov
+     2026); the picture keeps still while it folds. */
   function slerp(a, b, t) {
     var dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2], o, k0, k1;
     if (dot > .9995) { var q = [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)], l = Math.hypot(q[0], q[1], q[2]) || 1; return [q[0] / l, q[1] / l, q[2] / l]; }
@@ -271,15 +248,28 @@
   function project(P, view, cx, cy, s) {
     return P.map(function (p) { var q = D.turn(p, view.yaw || 0, view.pitch || 0, 0); return { x: cx + q[0] * s, y: cy - q[1] * s, z: q[2] }; });
   }
+  /* a folding chain can swing wide for a moment: it is moved, never squeezed, so that it stays inside the picture */
+  function inside(Q, W, H, m) {
+    var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    Q.forEach(function (q) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); });
+    /* past one edge: moved in; wider than the room: centred, so both ends show */
+    var dx = x1 - x0 > W - 2 * m ? (W - x0 - x1) / 2 : x0 < m ? m - x0 : x1 > W - m ? W - m - x1 : 0;
+    var dy = y1 - y0 > H - 2 * m ? (H - y0 - y1) / 2 : y0 < m ? m - y0 : y1 > H - m ? H - m - y1 : 0;
+    return dx || dy ? Q.map(function (q) { return { x: q.x + dx, y: q.y + dy, z: q.z }; }) : Q;
+  }
   /* a chain of beads in depth order; `upTo` how many have joined (all, if left out); `s` px to one step. Each link runs from the
      surface of one bead to the surface of the next, in short pieces at their own depth, so a link never jumps over its own bead
      as the chain turns. Farther beads are a little darker. */
-  function drawChain3(c, Q, kinds, r, upTo, alpha, s) {
+  function drawChain3(c, Q, kinds, r, upTo, alpha, s, ends) {
     var m = upTo == null ? Q.length : Math.floor(upTo), items = [], zl = 1e9, zh = -1e9, u = s || 22, rz = r / u;
     Q.forEach(function (q) { zl = Math.min(zl, q.z); zh = Math.max(zh, q.z); });
     var span = zh - zl, fog = function (z) { return span > .3 ? .34 * (zh - z) / span : 0; };
     Q.forEach(function (q, i) {
-      items.push({ z: q.z, f: function () { D.bead(c, q.x, q.y, r, kinds[i], alpha, fog(q.z)); } });
+      items.push({ z: q.z, f: function () {
+        D.bead(c, q.x, q.y, r, kinds[i], alpha, fog(q.z));
+        /* the two ends of the chain, ringed, so its length can be followed from one end to the other */
+        if (ends && (i === 0 || i === Q.length - 1)) { c.globalAlpha = alpha == null ? 1 : alpha; c.strokeStyle = '#FFFFFF'; c.lineWidth = 2; c.beginPath(); c.arc(q.x, q.y, r + 3, 0, TAU); c.stroke(); c.globalAlpha = 1; }
+      } });
       if (!i || i >= m) return;
       var A = Q[i - 1], dx = (q.x - A.x) / u, dy = (q.y - A.y) / u, dz = q.z - A.z, L = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (L < rz * 2) return;
@@ -295,9 +285,6 @@
     items.sort(function (a, b) { return a.z - b.z; });
     items.forEach(function (it) { it.f(); });
   }
-  var KINDS1 = [], KINDS2 = [];
-  (function () { var R = D.rng(23), S2 = D.rng(77); for (var i = 0; i < 30; i++) { KINDS1.push(Math.floor(R() * 20)); KINDS2.push(Math.floor(S2() * 20)); } })();
-  var FOLD1 = fold3Of(27, 30, [.06, .1, .08], [.62, -.46, .2], .3), FOLD2 = fold3Of(10, 30, [.06, .1, .08], [-.5, -.42, -.15], .3);   /* open enough that the chain can be followed by eye */
 
   /* ======================================================================= a real protein: amylase, measured
      The Y7 cell game's molecule (js/data/amylase.js: PDB 1SMD, 496 amino acids). Its beads swell, take amylase's own colour and
@@ -343,7 +330,7 @@
     return A.vn.map(function (n, i) {
       var q = D.turn(n, view.yaw || 0, view.pitch || 0, 0), lam = Math.max(0, q[0] * LIGHT[0] + q[1] * LIGHT[1] + q[2] * LIGHT[2]);
       var hz = Math.max(0, q[2]) * .5 + lam * .5, o = Math.pow(Math.min(1, A.shut.charCodeAt(i) / 255 / .15), .7), k = .4 + .66 * lam, sp = Math.pow(hz, 24) * 70;
-      return [AMY_COL[0] * (1 - .62 * o) * k + sp, AMY_COL[1] * (1 - .8 * o) * k + sp, AMY_COL[2] * (1 - .92 * o) * k + sp].map(function (x) { return Math.min(255, x); });
+      return [AMY_COL[0] * (1 - .32 * o) * k + sp, AMY_COL[1] * (1 - .42 * o) * k + sp, AMY_COL[2] * (1 - .5 * o) * k + sp].map(function (x) { return Math.min(255, x); });
     });
   }
   var RASTER = null;
@@ -384,20 +371,20 @@
         g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(d.x, d.y); g.closePath(); g.fillStyle = 'rgb(' + cl.map(Math.round).join(',') + ')'; g.fill();
       });
   }
-  /* k: 0 its amino acids, 1 its smooth shape. trace (0…1): a light that runs along the chain, from its first amino acid to its last,
-     so the one long chain can be followed (null: none) */
-  function drawAmylase(c, cx, cy, s, view, k, trace) {
+  /* k: 0 its amino acids, 1 its smooth shape. grow (0…1): how much of the chain is drawn, from its first amino acid onwards, so the
+     one long chain can be followed as it fills the shape (Daniel, 24 Nov 2026: a glow along the chain was "very hard to understand") */
+  function drawAmylase(c, cx, cy, s, view, k, grow) {
     var A = amylase(); if (!A) return null;
     var bk = ease(clamp(k / .7)), sk = clamp((k - .45) / .45), Q = project(A.ca, view, cx, cy, s);
     if (sk < 1) {
-      var items = [], r = lerp(.3, .5, bk) * s, zl = 1e9, zh = -1e9, at = trace == null ? -99 : trace * (A.n + 30) - 15, linkA = 1 - clamp(bk * 2.2);
+      var items = [], r = lerp(.13, .5, bk) * s, zl = 1e9, zh = -1e9, upTo = grow == null ? A.n : grow * A.n, linkA = 1 - clamp(bk * 2.2);
       Q.forEach(function (q) { zl = Math.min(zl, q.z); zh = Math.max(zh, q.z); });
       Q.forEach(function (q, i) {
-        var fog = .36 * (zh - q.z) / Math.max(.1, zh - zl), lit = Math.max(0, 1 - Math.abs(i - at) / 14);
-        var col = D.mixHex(D.mixHex(D.AA[A.kind[i] % D.AA.length], '#E2A242', bk), '#FFFFFF', lit * .6);
-        items.push({ z: q.z, f: function () { D.bead(c, q.x, q.y, r * (1 + lit * .25), col, null, fog * (1 - lit)); } });
+        if (i >= upTo) return;
+        var fog = .36 * (zh - q.z) / Math.max(.1, zh - zl), col = D.AA[A.kind[i] % D.AA.length];
+        items.push({ z: q.z, f: function () { D.bead(c, q.x, q.y, r, col, null, fog); } });
         if (i && linkA > 0) items.push({ z: (q.z + Q[i - 1].z) / 2, f: function () {
-          c.globalAlpha = linkA; c.strokeStyle = D.mixHex('#8496AA', '#132A40', fog); c.lineWidth = r * .5; c.lineCap = 'round';
+          c.globalAlpha = linkA; c.strokeStyle = D.mixHex('#A9B8C8', '#132A40', fog); c.lineWidth = Math.max(1.2, .07 * s); c.lineCap = 'round';
           c.beginPath(); c.moveTo(Q[i - 1].x, Q[i - 1].y); c.lineTo(q.x, q.y); c.stroke(); c.globalAlpha = 1;
         } });
       });
@@ -410,8 +397,37 @@
   /* the box round the whole molecule: its smooth shape is the largest it is ever drawn */
   function amylaseBox(cx, cy, s, view) { var A = amylase(); return boxOf(project(A.v, view, cx, cy, s).map(function (q) { return [q.x, q.y]; }), 8); }
 
+  /* two stretches of amylase's chain, as the folded chains of the station: 1SMD amino acids 68–97 (a helix, a turn and a strand)
+     and 401–430 (three strands side by side). Each is laid with its longest side across the picture and its next longest upright
+     (a turn, never a mirror image), then tipped a little so its depth can be seen. Each link is one step long. */
+  function realFold(start, tip) {
+    var A = amylase(), P = A.ca.slice(start, start + 30), c = [0, 0, 0];
+    P.forEach(function (p) { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; }); c = c.map(function (q) { return q / 30; });
+    P = P.map(function (p) { return [p[0] - c[0], p[1] - c[1], p[2] - c[2]]; });
+    function axis(skip) {
+      var v = [1, .3, .2];
+      for (var it = 0; it < 60; it++) {
+        var w = [0, 0, 0];
+        P.forEach(function (p) { var d = p[0] * v[0] + p[1] * v[1] + p[2] * v[2]; w[0] += p[0] * d; w[1] += p[1] * d; w[2] += p[2] * d; });
+        skip.forEach(function (e) { var d = w[0] * e[0] + w[1] * e[1] + w[2] * e[2]; w = [w[0] - e[0] * d, w[1] - e[1] * d, w[2] - e[2] * d]; });
+        var l = Math.hypot(w[0], w[1], w[2]) || 1; v = [w[0] / l, w[1] / l, w[2] / l];
+      }
+      return v;
+    }
+    var e1 = axis([]), e2 = axis([e1]), e3 = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    var dirs = [];
+    for (var i = 1; i < 30; i++) {
+      var d = [P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1], P[i][2] - P[i - 1][2]], l = Math.hypot(d[0], d[1], d[2]) || 1;
+      var q = [(d[0] * e1[0] + d[1] * e1[1] + d[2] * e1[2]) / l, (d[0] * e2[0] + d[1] * e2[1] + d[2] * e2[2]) / l, (d[0] * e3[0] + d[1] * e3[1] + d[2] * e3[2]) / l];
+      dirs.push(D.turn(q, tip[0], tip[1], tip[2]));
+    }
+    var ORDER = 'ACDEFGHIKLMNPQRSTVWY';
+    return { dirs: dirs, kinds: A.seq.slice(start, start + 30).split('').map(function (q) { return Math.max(0, ORDER.indexOf(q)); }) };
+  }
+  var F1 = realFold(67, [.35, -.3, 0]), F2 = realFold(400, [-.4, -.3, 0]), FOLD1 = F1.dirs, FOLD2 = F2.dirs, KINDS1 = F1.kinds, KINDS2 = F2.kinds;
+
   global.MolShapes = { POLY: POLY, drawPoly: drawPoly, polyVia: polyVia, AMY: AMY, amyAt: amyAt, iodineAtoms: iodineAtoms, drawAmylose: drawAmylose, boxOf: boxOf, drawBox: drawBox, polyBox: polyBox,
-                       chain3At: chain3At, project: project, drawChain3: drawChain3, KINDS1: KINDS1, KINDS2: KINDS2, FOLD1: FOLD1, FOLD2: FOLD2, amylase: amylase, drawRealProtein: drawAmylase, realBox: amylaseBox };
+                       chain3At: chain3At, project: project, inside: inside, drawChain3: drawChain3, KINDS1: KINDS1, KINDS2: KINDS2, FOLD1: FOLD1, FOLD2: FOLD2, FOLD_FROM: [68, 401], amylase: amylase, drawRealProtein: drawAmylase, realBox: amylaseBox };
 
   /* ==================================================================================== 1. from a chain to its atoms */
   L.add('atomsfilm', Film({
@@ -562,70 +578,77 @@
   /* ==================================================================================== 4. a protein from amino acids */
   L.add('protfilm', Film({
     title: 'From amino acids to a protein',
-    aria: 'Separate amino acids of different kinds join, one after another, in a chain. The chain folds into a 3D shape. A chain with a different sequence of amino acids has a different shape. A real protein, amylase, is shown as its folded chain of amino acids, which then merge into one smooth shape: the same folded chain.',
-    key: [['amino', 'an amino acid (each colour is one kind)'], ['protSurf', 'the folded chain, drawn as a smooth shape', [4]]],
-    M: [0, 4.5, 11, 17.5, 25, 35.5],
+    aria: 'Separate amino acids of different kinds join, one after another, in a chain. The chain folds into a 3D shape. Amino acids in a different sequence join and fold into a different shape. A real protein, amylase, is built up one amino acid after another, and its folded chain then merges into one smooth shape: the same folded chain.',
+    key: [['amino', 'an amino acid (each colour is one kind)'], ['chainEnd', 'an end of the chain', [1, 2, 3]], ['protSurf', 'the folded chain, drawn as a smooth shape', [4]]],
+    M: [0, 4.5, 11, 17.5, 26.5, 38.5],
     steps: [
       { t: 0, still: 4.2, h: 'Amino acids', p: [['ig', 'Proteins are made from small molecules called **amino acids**. Here, each colour is one kind of amino acid.'], ['ib', 'There are 20 different kinds of amino acid in proteins.']] },   /* IB B1.2.4 */
       { t: 4.5, still: 10.8, h: 'A chain', p: [['ig', 'Amino acids join, one after another, in a **chain**.']] },
       { t: 11, still: 17.2, h: 'The chain folds', p: [['ig', 'The chain **folds** into its own **3D shape**. The chain does not become longer or shorter: only its shape changes.']] },
-      { t: 17.5, still: 24.6, h: 'A different sequence', p: [['ig', 'A different **sequence** (order) of amino acids makes a **different protein**, with a different shape.']] },
-      { t: 25, still: 35, h: 'A real protein', p: [['ig', 'A real protein is a much longer chain. **Amylase**, the enzyme in saliva, has 496 amino acids.'], ['ig', 'Pictures often show a protein as one **smooth shape**. This smooth shape is the folded chain itself: every amino acid is still inside it.']] }
+      { t: 17.5, still: 26.1, h: 'A different sequence', p: [['ig', 'Amino acids in a different **sequence** (order) join and fold into a **different protein**, with a different shape.']] },
+      { t: 26.5, still: 38, h: 'A real protein', p: [['ig', 'A real protein is a much longer chain. **Amylase**, the enzyme in saliva, has 496 amino acids. The picture adds them one after another, in the order of the chain.'], ['ig', 'Pictures often show a protein as one **smooth shape**. This smooth shape is the folded chain itself: every amino acid is still inside it.']] }
     ],
     make: function () {
       var W = 560, H = 400, n = 30, step = 28, r = 9.4;
-      var R = D.rng(9), free = [];
+      var R = D.rng(9), free = [], free2 = [];
       for (var i = 0; i < n; i++) free.push([38 + R() * (W - 76), 34 + R() * (H - 68)]);
+      /* the second sequence's amino acids appear in the lower part of the picture, below the first protein */
+      for (var i2 = 0; i2 < n; i2++) free2.push([38 + R() * (W - 76), H * .58 + R() * (H * .42 - 30)]);
       var still = { yaw: 0, pitch: 0 };
-      function at(F, k, cx, cy, view) { return project(chain3At(F, n, k), view || still, cx == null ? W / 2 : cx, cy == null ? H / 2 : cy, step); }
+      function at(F, k, cx, cy, view) { return inside(project(chain3At(F, n, k), view || still, cx == null ? W / 2 : cx, cy == null ? H / 2 : cy, step), W, H, r + 6); }
       function turnAfter(t, t0) { return { yaw: .9 * ease(seg(t, t0, t0 + 2)), pitch: 0 }; }
       function boxOfQ(Q) { return boxOf(Q.map(function (q) { return [q.x, q.y]; }), r + 8); }
+      /* amino acids that move one after another from where they are into a chain; a link forms only when both its amino acids are in place */
+      function joining(t, t0, from, line, amb, gap) {
+        var done = 0, Q = line.map(function (p, j) {
+          var a = from[j], tj = t0 + j * gap, kk = ease(seg(t, tj, tj + .9)), w = 1 - kk;
+          if (t >= tj + .9 && done === j) done = j + 1;
+          return { x: lerp(a[0] + Math.sin(amb * .6 + j * 2) * 5 * w, p.x, kk), y: lerp(a[1] + Math.cos(amb * .5 + j * 3) * 5 * w, p.y, kk), z: 0 };
+        });
+        return { Q: Q, done: done };
+      }
+      var A0 = { yaw: -.35, pitch: .12 };
       return scene(W, H, {
         draw: function (c, t, amb) {
           if (t < 11) {
-            /* each amino acid arrives in turn, and a link forms only when both of its amino acids are in place */
-            var line = at(FOLD1, 0), done = 0;
-            var Q = line.map(function (p, j) {
-              var a = free[j], t0 = 4.8 + j * .13, kk = ease(seg(t, t0, t0 + .9)), w = 1 - kk;
-              if (t >= t0 + .9 && done === j) done = j + 1;
-              return { x: lerp(a[0] + Math.sin(amb * .6 + j * 2) * 5 * w, p.x, kk), y: lerp(a[1] + Math.cos(amb * .5 + j * 3) * 5 * w, p.y, kk), z: 0 };
-            });
-            drawChain3(c, Q, KINDS1, r, Math.max(1, done), null, step);
+            var J = joining(t, 4.8, free, at(FOLD1, 0), amb, .13);
+            drawChain3(c, J.Q, KINDS1, r, Math.max(1, J.done), null, step, J.done >= n);
           } else if (t < 17.5) {
             /* the picture keeps still while the chain folds, then turns a little, so its depth can be seen */
             var Q1 = at(FOLD1, ease(seg(t, 11.3, 15.4)), W / 2, H / 2, turnAfter(t, 15.5));
-            drawChain3(c, Q1, KINDS1, r, null, null, step);
+            drawChain3(c, Q1, KINDS1, r, null, null, step, true);
             if (t >= 16.6) drawBox(c, boxOfQ(Q1), clamp((t - 16.6) / .4));
-          } else if (t < 25) {
-            /* the first protein waits higher up while the second chain joins along the foot, then both stand side by side */
-            var mv = ease(seg(t, 17.7, 19.2)), back = ease(seg(t, 21.3, 24.2)), v1 = turnAfter(t, 15.5);
-            drawChain3(c, at(FOLD1, 1, lerp(W / 2, W * .27, mv), lerp(H / 2, H * .3, mv * (1 - back)), v1), KINDS1, r, null, null, step);
-            /* the second chain joins along the foot of the picture, where its own sequence can be seen, and then folds */
-            if (t >= 19.4) {
-              var fk = ease(seg(t, 21.3, 24.2)), cx2 = lerp(W / 2, W * .73, fk), cy2 = lerp(H - 88, H / 2, fk);
-              drawChain3(c, at(FOLD2, fk, cx2, cy2, v1), KINDS2, r, 1 + seg(t, 19.4, 21.2) * (n - 1), null, step);
+          } else if (t < 26.5) {
+            /* the first protein waits higher up; the new amino acids appear below it, join one after another along the foot, and
+               the new chain folds; then both stand side by side */
+            var mv = ease(seg(t, 17.7, 19.0)), back = ease(seg(t, 23.0, 25.6)), v1 = turnAfter(t, 15.5);
+            drawChain3(c, at(FOLD1, 1, lerp(W / 2, W * .27, mv), lerp(H / 2, H * .3, mv * (1 - back)), v1), KINDS1, r, null, null, step, true);
+            if (t >= 18.8) {
+              var ap = seg(t, 18.8, 19.4), fk = ease(seg(t, 23.0, 25.6)), cx2 = lerp(W / 2, W * .73, fk), cy2 = lerp(H - 104, H / 2, fk);
+              if (t < 23.0) { var J2 = joining(t, 19.5, free2, at(FOLD2, 0, W / 2, H - 104), amb, .1); drawChain3(c, J2.Q, KINDS2, r, Math.max(1, J2.done), ap, step); }
+              else drawChain3(c, at(FOLD2, fk, cx2, cy2, v1), KINDS2, r, null, null, step, true);
             }
-            if (t >= 24.2) { var ba = clamp((t - 24.2) / .4); drawBox(c, boxOfQ(at(FOLD1, 1, W * .27, H / 2, v1)), ba); drawBox(c, boxOfQ(at(FOLD2, 1, W * .73, H / 2, v1)), ba); }
+            if (t >= 25.6) { var ba = clamp((t - 25.6) / .4); drawBox(c, boxOfQ(at(FOLD1, 1, W * .27, H / 2, v1)), ba); drawBox(c, boxOfQ(at(FOLD2, 1, W * .73, H / 2, v1)), ba); }
           } else {
             /* one picture leaves before the next arrives */
-            var inA = seg(t, 25.4, 26.2), view = { yaw: -.35 + .5 * ease(seg(t, 29.6, 34.6)), pitch: .12 };
-            if (t < 25.4) { var outA = 1 - seg(t, 25, 25.4); drawChain3(c, at(FOLD1, 1, W * .27, H / 2, turnAfter(t, 15.5)), KINDS1, r, null, outA, step); drawChain3(c, at(FOLD2, 1, W * .73, H / 2, turnAfter(t, 15.5)), KINDS2, r, null, outA, step); }
+            var inA = seg(t, 26.9, 27.4), view = { yaw: -.35 + .5 * ease(seg(t, 33.2, 37.6)), pitch: .12 };
+            if (t < 26.9) { var outA = 1 - seg(t, 26.5, 26.9); drawChain3(c, at(FOLD1, 1, W * .27, H / 2, turnAfter(t, 15.5)), KINDS1, r, null, outA, step); drawChain3(c, at(FOLD2, 1, W * .73, H / 2, turnAfter(t, 15.5)), KINDS2, r, null, outA, step); }
             else {
-              onLayer(c, inA, function (g) { drawAmylase(g, W / 2, H / 2 + 6, 36, view, seg(t, 30, 33.2), t < 26.4 || t > 29.4 ? null : seg(t, 26.4, 29.4)); });
+              onLayer(c, inA, function (g) { drawAmylase(g, W / 2, H / 2 + 6, 36, view, seg(t, 33.2, 36.4), seg(t, 27.4, 31.2)); });
               /* the name stands for the whole molecule */
-              if ((t >= 26.4 && t < 30) || t >= 33.2) drawBox(c, amylaseBox(W / 2, H / 2 + 6, 36, view), clamp(t < 30 ? (t - 26.4) / .4 : (t - 33.2) / .4));
+              if ((t >= 31.2 && t < 33.2) || t >= 36.4) drawBox(c, amylaseBox(W / 2, H / 2 + 6, 36, view), clamp(t < 33.2 ? (t - 31.2) / .4 : (t - 36.4) / .4));
             }
           }
         },
         labels: function (t) {
           if (t < 4.6) return [{ id: 'a', text: 'one amino acid', x: free[4][0], y: free[4][1] - 7, side: 'T' }];
           if (t >= 16.6 && t < 17.5) { var b0 = boxOfQ(at(FOLD1, 1, W / 2, H / 2, turnAfter(t, 15.5))); return [{ id: 'p', text: 'one protein', x: b0.cx, y: b0.y, side: 'T' }]; }
-          if (t >= 24.2 && t < 25) {
+          if (t >= 25.6 && t < 26.5) {
             var v1 = turnAfter(t, 15.5), b1 = boxOfQ(at(FOLD1, 1, W * .27, H / 2, v1)), b2 = boxOfQ(at(FOLD2, 1, W * .73, H / 2, v1));
             return [{ id: 'p1', text: 'one protein', x: b1.cx, y: b1.y, side: 'T' }, { id: 'p2', text: 'a different protein', x: b2.cx, y: b2.y, side: 'T' }];
           }
-          if (t >= 26.4 && t < 30) { var ba = amylaseBox(W / 2, H / 2 + 6, 36, { yaw: -.35, pitch: .12 }); return [{ id: 'am', text: 'amylase', x: ba.cx, y: ba.y, side: 'T' }]; }
-          if (t >= 33.2) { var bs = amylaseBox(W / 2, H / 2 + 6, 36, { yaw: -.35 + .5 * ease(seg(t, 29.6, 34.6)), pitch: .12 }); return [{ id: 'sf', text: 'amylase as a smooth shape', x: bs.cx, y: bs.y, side: 'T' }]; }
+          if (t >= 31.2 && t < 33.2) { var ba = amylaseBox(W / 2, H / 2 + 6, 36, A0); return [{ id: 'am', text: 'amylase', x: ba.cx, y: ba.y, side: 'T' }]; }
+          if (t >= 36.4) { var bs = amylaseBox(W / 2, H / 2 + 6, 36, { yaw: -.35 + .5 * ease(seg(t, 33.2, 37.6)), pitch: .12 }); return [{ id: 'sf', text: 'amylase as a smooth shape', x: bs.cx, y: bs.y, side: 'T' }]; }
           return [];
         }
       });
@@ -674,26 +697,70 @@
   }));
 
   /* ==================================================================================== 6. preparing a food sample */
-  function mortar(c, x, y, grind, stir, water, t) {
-    c.save();
-    c.beginPath(); c.moveTo(x - 66, y); c.quadraticCurveTo(x - 58, y + 54, x, y + 58); c.quadraticCurveTo(x + 58, y + 54, x + 66, y); c.closePath();
-    var lg = c.createLinearGradient(x - 66, 0, x + 66, 0); lg.addColorStop(0, '#CBD3DC'); lg.addColorStop(.5, '#F2F5F8'); lg.addColorStop(1, '#9CA8B5');
-    c.fillStyle = lg; c.fill(); c.strokeStyle = '#6B7886'; c.lineWidth = 1.2; c.stroke();
-    c.beginPath(); c.ellipse(x, y, 66, 10, 0, 0, TAU); c.fillStyle = '#AAB5C1'; c.fill(); c.strokeStyle = '#6B7886'; c.stroke();
-    c.beginPath(); c.ellipse(x, y + 1, 58, 7, 0, 0, TAU); c.clip();
-    var R = D.rng(3);
-    for (var i = 0; i < 26; i++) {
-      var a = R() * TAU, rr = R() * 52, px = x + Math.cos(a) * rr, py = y + 2 + Math.sin(a) * 5, s = lerp(5.2, 1.4, grind) * (.7 + R() * .5);
-      c.fillStyle = i % 3 ? '#E8DFC4' : '#D6C99F'; c.beginPath(); c.arc(px, py, s, 0, TAU); c.fill();
+  /* the food in the mortar: sixty grains that start as nine broken chunks (each chunk is its grains packed together) and are ground
+     apart into fine crumbs (Daniel, 24 Nov 2026: "make sure that the pieces look a bit more professionally done") */
+  var GRAINS = (function () {
+    var R = D.rng(31), chunks = [], out = [];
+    for (var k = 0; k < 9; k++) chunks.push([(R() - .5) * 84, (R() - .5) * 6, .6 + R() * .5]);
+    for (var i = 0; i < 60; i++) {
+      var ch = chunks[i % 9], a = R() * TAU, sides = 5 + Math.floor(R() * 3), shape = [];
+      for (var v = 0; v < sides; v++) shape.push(.72 + R() * .42);
+      out.push({ cx: ch[0] + Math.cos(a) * 5 * ch[2], cy: ch[1] + Math.sin(a) * 2.2, fx: (R() - .5) * 96, fy: (R() - .5) * 8, rot: R() * TAU, shape: shape, tone: R(), big: ch[2] });
     }
-    /* the water, rising over the ground food */
-    if (water > 0) { c.fillStyle = 'rgba(150,205,235,' + (.6 * water).toFixed(3) + ')'; c.fillRect(x - 60, y - 9 + 9 * (1 - water), 120, 20); }
-    c.restore();
-    var sw = grind > 0 && grind < 1 ? Math.sin((t || 0) * 5) * 14 : stir > 0 ? Math.sin((t || 0) * 3.4) * 24 * stir : 0;
-    c.save(); c.translate(x + 16 + sw, y + 1); c.rotate(.42 + sw * .012);
-    D.rr(c, -7, -92, 14, 92, 7); var pg = c.createLinearGradient(-7, 0, 7, 0); pg.addColorStop(0, '#E6EBF0'); pg.addColorStop(1, '#9CA8B5');
-    c.fillStyle = pg; c.fill(); c.strokeStyle = '#6B7886'; c.lineWidth = 1; c.stroke(); c.restore();
+    return out;
+  })();
+  function grain(c, x, y, s, g) {
+    c.beginPath();
+    g.shape.forEach(function (k, v) { var a = g.rot + v * TAU / g.shape.length; c[v ? 'lineTo' : 'moveTo'](x + Math.cos(a) * s * k, y + Math.sin(a) * s * k * .8); });
+    c.closePath();
+    var lg = c.createLinearGradient(x - s, y - s, x + s, y + s);
+    lg.addColorStop(0, D.mixHex('#F6EED6', '#E9DDB6', g.tone)); lg.addColorStop(1, D.mixHex('#C9B583', '#B49D66', g.tone));
+    c.fillStyle = lg; c.fill(); c.strokeStyle = 'rgba(110,88,48,.55)'; c.lineWidth = .5; c.stroke();
   }
+  function mortar(c, x, y, grind, stir, water, t) {
+    /* a white porcelain mortar: glazed outside, a matt grey inside, a lip for pouring */
+    c.save();
+    c.beginPath(); c.moveTo(x - 68, y); c.bezierCurveTo(x - 66, y + 46, x - 30, y + 62, x, y + 62); c.bezierCurveTo(x + 30, y + 62, x + 66, y + 46, x + 68, y); c.closePath();
+    var lg = c.createLinearGradient(x - 68, 0, x + 68, 0); lg.addColorStop(0, '#D7DDE3'); lg.addColorStop(.35, '#FBFCFD'); lg.addColorStop(1, '#A9B4BF');
+    c.fillStyle = lg; c.fill(); c.strokeStyle = '#7A8794'; c.lineWidth = 1.1; c.stroke();
+    D.rr(c, x - 30, y + 58, 60, 9, 4); c.fillStyle = '#C7CFD7'; c.fill(); c.strokeStyle = '#7A8794'; c.stroke();
+    c.beginPath(); c.ellipse(x, y, 68, 11, 0, 0, TAU); c.fillStyle = '#E9EDF1'; c.fill(); c.strokeStyle = '#7A8794'; c.stroke();
+    c.beginPath(); c.ellipse(x, y + 1.5, 60, 8, 0, 0, TAU); var ig = c.createRadialGradient(x, y + 3, 4, x, y + 2, 62); ig.addColorStop(0, '#B9C1C9'); ig.addColorStop(1, '#8E99A4'); c.fillStyle = ig; c.fill();
+    c.beginPath(); c.ellipse(x, y + 1.5, 60, 8, 0, 0, TAU); c.clip();
+    GRAINS.forEach(function (g, i) {
+      var k = ease(clamp(grind * 1.15 - (i % 9) * .02)), s = lerp(5.4 * g.big, 1.7, k);
+      grain(c, x + lerp(g.cx, g.fx * .56, k), y + 2 + lerp(g.cy, g.fy * .5, k), s, g);
+    });
+    /* the water, rising over the ground food; the soluble part colours it a little */
+    if (water > 0) { c.fillStyle = 'rgba(176,214,236,' + (.55 * water).toFixed(3) + ')'; c.fillRect(x - 62, y - 9 + 9 * (1 - water), 124, 22); c.fillStyle = 'rgba(255,255,255,' + (.35 * water).toFixed(3) + ')'; c.fillRect(x - 62, y - 9 + 9 * (1 - water), 124, .9); }
+    c.restore();
+    /* the pestle: a white porcelain rod with a rounded end, worked in the bowl */
+    var sw = grind > 0 && grind < 1 ? Math.sin((t || 0) * 5) * 14 : stir > 0 ? Math.sin((t || 0) * 3.4) * 24 * stir : 0;
+    c.save(); c.translate(x + 16 + sw, y + 2); c.rotate(.42 + sw * .012);
+    c.beginPath(); c.moveTo(-5, -96); c.lineTo(5, -96); c.lineTo(8, -14); c.quadraticCurveTo(9, 2, 0, 3); c.quadraticCurveTo(-9, 2, -8, -14); c.closePath();
+    var pg = c.createLinearGradient(-9, 0, 9, 0); pg.addColorStop(0, '#E2E7EC'); pg.addColorStop(.4, '#FFFFFF'); pg.addColorStop(1, '#A5B0BB');
+    c.fillStyle = pg; c.fill(); c.strokeStyle = '#7A8794'; c.lineWidth = 1; c.stroke(); c.restore();
+  }
+  /* a wash bottle of distilled water, the way water is added in a laboratory: a soft plastic bottle, its cap and its bent spout.
+     Its base stands at (x, y); `tilt` 0…1 leans it towards the mortar, its spout pointing down into the bowl; `sq` squeezes it. */
+  var WB = { s: .8, lean: .62 };
+  function washBottle(c, x, y, tilt, sq) {
+    c.save(); c.translate(x, y); c.rotate(WB.lean * tilt); c.scale(WB.s, WB.s);
+    var w = 30 - 3 * sq;
+    c.beginPath(); c.moveTo(-w / 2, 0); c.lineTo(-w / 2, -58); c.quadraticCurveTo(-w / 2, -70, -8, -72); c.lineTo(8, -72); c.quadraticCurveTo(w / 2, -70, w / 2, -58); c.lineTo(w / 2, 0); c.quadraticCurveTo(w / 2, 4, 0, 4); c.quadraticCurveTo(-w / 2, 4, -w / 2, 0); c.closePath();
+    var bg = c.createLinearGradient(-w / 2, 0, w / 2, 0); bg.addColorStop(0, 'rgba(236,244,250,.9)'); bg.addColorStop(.4, 'rgba(255,255,255,.95)'); bg.addColorStop(1, 'rgba(196,212,226,.9)');
+    c.fillStyle = bg; c.fill(); c.strokeStyle = '#8796A5'; c.lineWidth = 1; c.stroke();
+    c.fillStyle = 'rgba(176,214,236,.55)'; c.fillRect(-w / 2 + 1.5, -36, w - 3, 38);
+    D.rr(c, -8, -80, 16, 9, 2); c.fillStyle = '#3E7CC3'; c.fill(); c.strokeStyle = '#2A5A92'; c.stroke();
+    c.strokeStyle = '#C9D6E2'; c.lineWidth = 3; c.lineCap = 'round'; c.beginPath(); c.moveTo(0, -80); c.lineTo(0, -96); c.quadraticCurveTo(0, -104, 12, -104); c.lineTo(24, -104); c.stroke();
+    c.strokeStyle = '#8796A5'; c.lineWidth = .8; c.beginPath(); c.moveTo(0, -80); c.lineTo(0, -96); c.quadraticCurveTo(0, -104, 12, -104); c.lineTo(24, -104); c.stroke();
+    c.fillStyle = '#FFFFFF'; D.rr(c, -w / 2 + 3, -54, w - 6, 13, 2); c.fill();
+    c.fillStyle = '#10202E'; c.font = '700 6.5px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('H\u2082O', 0, -47.5);
+    c.restore();
+    return bottleAt(x, y, tilt, 24, -104);
+  }
+  /* a point (u, v) of the bottle, in the picture: its spout's tip is (24, -104), the middle of its body (0, -36) */
+  function bottleAt(x, y, tilt, u, v) { var a = WB.lean * tilt, k = WB.s; return [x + k * (u * Math.cos(a) - v * Math.sin(a)), y + k * (u * Math.sin(a) + v * Math.cos(a))]; }
   /* the funnel: `level` how much mixture is still in the paper, `res` the solid left on it, `fill` the filtrate below */
   function funnelFlask(c, x, y, level, res, fill, drip) {
     c.beginPath(); c.moveTo(x - 9, y + 54); c.lineTo(x - 9, y + 74); c.lineTo(x - 44, y + 136); c.quadraticCurveTo(x, y + 142, x + 44, y + 136); c.lineTo(x + 9, y + 74); c.lineTo(x + 9, y + 54);
@@ -716,13 +783,13 @@
   }
   L.add('prepfilm', Film({
     title: 'Preparing a food for testing',
-    aria: 'A solid food is ground with a pestle in a mortar, water is added and stirred, the mixture is filtered if solid pieces hide the colour, and it is shared between labelled test tubes.',
+    aria: 'A solid food is ground with a pestle in a mortar, distilled water is added from a wash bottle and stirred, and the mixture is filtered: the filtrate passes through and the residue stays on the paper. Each test has its own labelled tube: the filtrate, the mixture, or for the ethanol test fresh food with no water.',
     M: [0, 6, 11, 17, 23.5],
     steps: [
       { t: 0, still: 5.8, h: 'Grind the food', p: [['ig', 'Most foods are solid. Cut a small piece, then **grind** it with a **pestle and mortar**.']] },
-      { t: 6, still: 10.8, h: 'Add water', p: [['ig', 'Add a little **distilled water** and stir. Substances that are soluble dissolve in the water.']] },
-      { t: 11, still: 16.8, h: 'Filter', p: [['ig', 'If solid pieces hide the colour of a test, **filter** the mixture. The liquid that passes through is the **filtrate**.']] },
-      { t: 17, still: 23.2, h: 'Label the tubes', p: [['ig', 'Use **labelled test tubes**, one for each test. Starch, fats and many proteins stay on the filter paper, so test for starch and protein with the **unfiltered** mixture, and for fats with a fresh, **dry** piece of food.']] }
+      { t: 6, still: 10.8, h: 'Add water', p: [['ig', 'Add a little **distilled water** from a wash bottle and stir. Substances that are soluble dissolve in the water.']] },
+      { t: 11, still: 16.8, h: 'Filter', p: [['ig', 'If solid pieces hide the colour of a test, **filter** the mixture. The liquid that passes through is the **filtrate**. The solid left on the filter paper is the **residue**.']] },
+      { t: 17, still: 23.2, h: 'Label the tubes', p: [['ig', 'Put each sample in its own **labelled test tube**. Use the **filtrate** for Benedict’s solution and DCPIP. Starch grains and many proteins stay in the residue, so use the **mixture** for iodine and biuret.'], ['ig', 'For the **ethanol** test, crush a fresh piece of food with **no water**: fats do not dissolve in water.']] }
     ],
     make: function () {
       var W = 560, H = 420, TY = 94, TH = 246, TW = 50;
@@ -735,14 +802,15 @@
             var gr = seg(t, .6, 5.4), wat = seg(t, 6.5, 8.4), stir = t >= 8.4 && t < 10.8 ? 1 : 0;
             c.save(); c.translate(W / 2, 222); c.scale(1.95, 1.95); c.translate(-W / 2, -167);
             mortar(c, W / 2, 184, gr, stir, wat, t);
-            if (t >= 6 && t < 8.8) {
-              var po = seg(t, 6, 6.5) * (1 - seg(t, 8.3, 8.8));
+            if (t >= 6 && t < 8.9) {
+              /* the wash bottle comes over the mortar, is squeezed, and a thin stream of distilled water runs into the bowl */
+              var po = seg(t, 6, 6.5) * (1 - seg(t, 8.4, 8.9)), on = t > 6.5 && t < 8.4;
               c.globalAlpha = fade1 * po;
-              c.save(); c.translate(W / 2 - 76, 112); c.rotate(.5);
-              D.rr(c, -14, -28, 28, 52, 5); c.fillStyle = 'rgba(190,226,245,.4)'; c.fill(); c.strokeStyle = C.glass; c.lineWidth = 1.5; c.stroke();
-              c.beginPath(); c.moveTo(12, -28); c.lineTo(30, -44); c.strokeStyle = C.glass; c.lineWidth = 3; c.stroke();
-              c.restore();
-              for (var i = 0; i < 4; i++) { var u = (amb * .9 + t * .9 + i / 4) % 1; D.drop(c, lerp(W / 2 - 29, W / 2 - 24, u), lerp(88, 180, u), '#BFE3F5', 2.8); }
+              var tip = washBottle(c, W / 2 - 104, 198, ease(seg(t, 6, 6.5)), on ? .5 + .5 * Math.sin(t * 9) : 0);
+              if (on) {
+                c.strokeStyle = 'rgba(176,214,236,.95)'; c.lineWidth = 1.6; c.lineCap = 'round';
+                c.beginPath(); c.moveTo(tip[0], tip[1]); c.quadraticCurveTo(tip[0] + 14, tip[1] + 4, W / 2 - 20, 183); c.stroke();
+              }
               c.globalAlpha = fade1;
             }
             c.restore();
@@ -760,10 +828,15 @@
             c.globalAlpha = fade3;
             var xs = [88, 184, 280, 376, 472], names = ['iodine', 'Benedict’s', 'biuret', 'ethanol', 'DCPIP'];
             D.rack(c, 36, 524, TY + TH * .44, TH * .6);
+            /* which sample each test uses (the 0610 mark schemes and examiner reports): the filtrate for Benedict's solution and DCPIP; the
+               mixture for iodine and biuret, because starch grains and many proteins stay in the residue; for the ethanol test, a fresh
+               piece of food crushed with no water, because fats do not dissolve in water (examiner reports 2010, 2019, 2025) */
+            var what = ['mixture', 'filtrate', 'mixture', 'food, no water', 'filtrate'];
             xs.forEach(function (x, i) {
               var k = seg(t, 18 + i * .8, 18.8 + i * .8), dry = i === 3, unf = i === 0 || i === 2;
               D.tube(c, x, TY, TW, TH, dry ? null : { col: unf ? '#D9D2B3' : 'rgba(240,235,205,.26)', level: .46 * k + .001, cloud: unf ? .45 : 0, bits: unf && k > .5 ? 12 : 0, bitsCol: 'rgba(120,100,60,.55)' });
-              if (dry && k > 0) { c.fillStyle = '#D6C99F'; [[-10, -13], [8, -11], [-1, -21]].forEach(function (q) { c.beginPath(); c.arc(x + q[0], TY + TH + q[1] + (1 - k) * -40, 6.6, 0, TAU); c.fill(); }); }
+              if (dry && k > 0) GRAINS.slice(0, 14).forEach(function (g, j) { grain(c, x + (j % 5 - 2) * 7 + (j > 9 ? 3 : 0), TY + TH - 10 - Math.floor(j / 5) * 6 + (1 - k) * -40, 4.2, g); });
+              if (k > .2) { var fs = D.textSize(c, 11.5, 9.5); c.font = '600 ' + fs + 'px Inter, system-ui, sans-serif'; c.fillStyle = 'rgba(236,244,250,' + (.9 * seg(k, .2, .6)).toFixed(3) + ')'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(what[i], x, TY + TH + 30); }
               c.fillStyle = '#F4F7FA'; D.rr(c, x - 44, TY - 32, 88, 24, 5); c.fill();
               c.fillStyle = '#10202E'; c.font = '600 ' + D.textSize(c, 13, 10) + 'px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(names[i], x, TY - 19.5);
             });
@@ -772,7 +845,8 @@
         },
         labels: function (t) {
           if (t < 6) return [{ id: 'm', text: 'mortar', x: W / 2 - 78, y: 335, side: 'B' }, { id: 'p', text: 'pestle', x: W / 2 + 92 + (t > .6 && t < 5.4 ? Math.sin(t * 5) * 27 : 0), y: 88, side: 'T' }];
-          if (t >= 12.2 && t < 17) { var fl = [{ id: 'fp', text: 'filter paper', x: W / 2 - 52, y: 76, side: 'T' }]; if (t >= 13.5) { fl.push({ id: 'ft', text: 'filtrate', x: W / 2, y: 354, side: 'B' }); fl.push({ id: 'sp', text: 'solid pieces', x: W / 2 + 17, y: 134, side: 'T' }); } return fl; }
+          if (t >= 6.5 && t < 8.4) { var bm = bottleAt(W / 2 - 104, 198, 1, 0, -36); return [{ id: 'wb', text: 'distilled water', x: W / 2 + (bm[0] - W / 2) * 1.95, y: 222 + (bm[1] - 167) * 1.95, side: 'T' }]; }
+          if (t >= 12.2 && t < 17) { var fl = [{ id: 'fp', text: 'filter paper', x: W / 2 - 52, y: 76, side: 'T' }]; if (t >= 13.5) { fl.push({ id: 'ft', text: 'filtrate', x: W / 2, y: 354, side: 'B' }); fl.push({ id: 'rs', text: 'residue', x: W / 2 + 17, y: 134, side: 'T' }); } return fl; }
           return [];
         }
       });

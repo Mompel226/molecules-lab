@@ -293,43 +293,69 @@
 
   /* ======================================================================= Proteins */
   Views.add('protv', function (spec, ctx) {
-    var W = 560, H = 400, n = 30, step = 28, r = 9.4, st = 'free', k = 1, amb = 0, kinds = S.KINDS1, F = S.FOLD1, was = 0, now = 0;
-    /* the folded chains and the real protein can be turned; the real protein can show its amino acids or its smooth surface */
-    var view = { yaw: 0, pitch: 0 }, surf = 0, surfTo = 0, trace = 1, FLAT = { yaw: 0, pitch: 0 };
-    var R = D.rng(9), free = []; for (var i = 0; i < n; i++) free.push([38 + R() * (W - 76), 34 + R() * (H - 68)]);
-    var KA = 'an amino acid (each colour is one kind)', KC = 'the folded chain, drawn as a smooth shape';
-    function shapeOf(s) { return s === 'fold' || s === 'other' ? 1 : 0; }
+    /* Every press shows the process, never only its result (Daniel, 24 Nov 2026: the other sequence "just show[s] already the shape
+       and you kind of form the links instead of actually showing the amino acids appearing"): amino acids appear, join one after
+       another, and then fold. The real protein is built up one amino acid after another, in the order of its chain. */
+    var W = 560, H = 400, n = 30, step = 28, r = 9.4, st = 'free', amb = 0;
+    var seq = 1, appear = 1, join = 0, fold = 0, grow = 1, surf = 0, surfTo = 0, queue = [];
+    var view = { yaw: 0, pitch: 0 }, FLAT = { yaw: 0, pitch: 0 };
+    var R = D.rng(9), FREE = [[], []];
+    for (var i = 0; i < n; i++) FREE[0].push([38 + R() * (W - 76), 34 + R() * (H - 68)]);
+    for (var i2 = 0; i2 < n; i2++) FREE[1].push([38 + R() * (W - 76), H * .58 + R() * (H * .42 - 30)]);   /* below the first protein, which waits higher up */
+    var KA = 'an amino acid (each colour is one kind)', KE = 'an end of the chain', KC = 'the folded chain, drawn as a smooth shape';
+    function F() { return seq === 1 ? S.FOLD1 : S.FOLD2; }
+    function kinds() { return seq === 1 ? S.KINDS1 : S.KINDS2; }
     function realBox() { return S.realBox(W / 2, H / 2 + 6, 36, view); }
+    /* the steps still to run, each with its own time (s) */
+    var DUR = { appear: .5, join: 2.2, fold: 2.2, unfold: 1.4, grow: 3.4 };
+    function run(list) { queue = V.isStill() ? [] : list.slice(); if (V.isStill()) list.forEach(finish); }
+    function finish(q) { if (q === 'appear') appear = 1; else if (q === 'join') join = 1; else if (q === 'fold') fold = 1; else if (q === 'unfold') fold = 0; else if (q === 'grow') grow = 1; }
     var scene = {
       W: W, H: H,
       tick: function (dt) {
-        amb += dt; if (k < 1) k = Math.min(1, k + dt / 2);
+        amb += dt;
+        if (queue.length) {
+          var q = queue[0], d = dt / DUR[q];
+          if (q === 'appear') appear = Math.min(1, appear + d); else if (q === 'join') join = Math.min(1, join + d);
+          else if (q === 'fold') fold = Math.min(1, fold + d); else if (q === 'unfold') fold = Math.max(0, fold - d); else if (q === 'grow') grow = Math.min(1, grow + d);
+          if ((q === 'appear' && appear >= 1) || (q === 'join' && join >= 1) || (q === 'fold' && fold >= 1) || (q === 'unfold' && fold <= 0) || (q === 'grow' && grow >= 1)) { queue.shift(); sync2(); }
+        }
         if (surf !== surfTo) surf = surfTo > surf ? Math.min(surfTo, surf + dt / 2.6) : Math.max(surfTo, surf - dt / 1.4);
-        if (trace < 1) trace = Math.min(1, trace + dt / 3.2);
       },
       draw: function (c) {
         D.frame(c, 0, 0, W, H, 16, function () {
           D.ground(c, 0, 0, W, H);
-          if (st === 'free') free.forEach(function (p, j) { D.bead(c, p[0] + Math.sin(amb * .6 + j * 2) * 5, p[1] + Math.cos(amb * .5 + j * 3) * 5, r, kinds[j]); });
-          else if (st === 'real') { S.drawRealProtein(c, W / 2, H / 2 + 6, 36, view, ease(surf), trace < 1 ? trace : null); S.drawBox(c, realBox(), 1); }
-          else { var f = lerp(was, now, ease(k)); S.drawChain3(c, S.project(S.chain3At(F, n, f), now ? view : FLAT, W / 2, H / 2, step), kinds, r, null, null, step); }
+          if (st === 'real') { S.drawRealProtein(c, W / 2, H / 2 + 6, 36, view, ease(surf), grow); if (grow >= 1) S.drawBox(c, realBox(), 1); return; }
+          /* the chain's places: a gentle wave, folding into its 3D shape; each amino acid moves into its place in turn */
+          /* another sequence: the first protein waits higher up, the new chain forms below it, and both end side by side */
+          var two = seq === 2, fe = ease(fold), cx = two ? lerp(W / 2, W * .73, fe) : W / 2, cy = two ? lerp(H - 104, H / 2, fe) : H / 2;
+          if (two) S.drawChain3(c, S.inside(S.project(S.chain3At(S.FOLD1, n, 1), view, W * .27, lerp(H * .3, H / 2, fe), step), W, H, r + 6), S.KINDS1, r, null, null, step, true);
+          var line = S.inside(S.project(S.chain3At(F(), n, fe), fold > 0 ? view : FLAT, cx, cy, step), W, H, r + 6), from = FREE[seq - 1], done = 0;
+          var Q = line.map(function (p, j) {
+            var a = from[j], tj = j / n * .72, kk = ease(seg(join, tj, tj + .28)), w = 1 - kk;
+            if (kk >= 1 && done === j) done = j + 1;
+            return kk >= 1 ? p : { x: lerp(a[0] + Math.sin(amb * .6 + j * 2) * 5 * w, p.x, kk), y: lerp(a[1] + Math.cos(amb * .5 + j * 3) * 5 * w, p.y, kk), z: p.z * kk };
+          });
+          S.drawChain3(c, Q, kinds(), r, Math.max(1, done), appear, step, done >= n);
         });
       },
       labels: function () {
-        if (st === 'free') return [{ id: 'a', text: 'one amino acid', x: free[4][0], y: free[4][1] - 7, side: 'T' }];
-        if (st === 'real') { var b = realBox(); return [{ id: 'r', text: surf > .5 ? 'amylase as a smooth shape' : 'amylase', x: b.cx, y: b.y, side: 'T' }]; }
+        if (st === 'real') { if (grow < 1) return []; var b = realBox(); return [{ id: 'r', text: surf > .5 ? 'amylase as a smooth shape' : 'amylase', x: b.cx, y: b.y, side: 'T' }]; }
+        if (join <= 0 && appear >= 1) return [{ id: 'a', text: 'one amino acid', x: FREE[seq - 1][4][0], y: FREE[seq - 1][4][1] - 7, side: 'T' }];
         return [];
       },
       read: function (pill) {
-        pill('s', st === 'free' ? 'separate amino acids' : st === 'chain' ? 'a chain: the sequence of amino acids' : st === 'fold' ? 'the chain folded into one 3D shape' : st === 'other' ? 'another sequence, another shape'
-          : surf > .5 ? 'the same folded chain, drawn as a smooth shape' : 'amylase, a real protein: 496 amino acids');
+        var busy = queue.length > 0;
+        pill('s', st === 'real' ? (grow < 1 ? 'amylase: its amino acids, one after another' : surf > .5 ? 'the same folded chain, drawn as a smooth shape' : 'amylase, a real protein: one chain of 496 amino acids')
+          : join <= 0 ? (seq === 2 ? 'amino acids in another sequence' : 'separate amino acids')
+          : busy ? (queue[0] === 'join' ? 'the amino acids join, one after another' : 'the chain folds')
+          : fold > 0 ? (seq === 2 ? 'another sequence, another shape' : 'the chain folded into one 3D shape') : 'a chain: the sequence of amino acids');
       }
     };
     var V = MV({
-      scene: scene, aria: 'Amino acids of different kinds, joined in a chain, and folded into a 3D shape. Another order of amino acids folds into another shape. A real protein, amylase, shown as its folded chain of amino acids or as one smooth shape, which is the same folded chain.',
+      scene: scene, aria: 'Amino acids of different kinds join, one after another, in a chain, which folds into a 3D shape. Amino acids in another order join and fold into another shape. A real protein, amylase, is built up one amino acid after another, and shown as its folded chain or as one smooth shape, which is the same folded chain.',
       barLabel: 'What to show', buttons: [['free', 'Amino acids'], ['chain', 'A chain'], ['fold', 'Folded'], ['other', 'Another sequence']], read: [['s', 'Shown:']], liveNames: true,
-      key: { all: [['amino', KA], ['protSurf', KC]], sets: [[KA], [KC]],
-             now: function () { return st === 'real' && surf > .5 ? [KC] : [KA]; } },
+      key: { all: [['amino', KA], ['chainEnd', KE], ['protSurf', KC]], sets: [[KA, KE], [KA], [KC]], now: function () { return st === 'real' ? (surf > .5 ? [KC] : [KA]) : join >= 1 ? [KA, KE] : [KA]; } },
       onButton: function (id) { set(id); ctx.pick(id === 'free' ? 'aa' : id === 'other' ? 'order' : id, { stay: true }); }
     });
     var B2 = bar(V, 'A real protein', [['real', 'A real protein'], ['surface', 'Its smooth shape']], function (id) {
@@ -339,26 +365,26 @@
     });
     var TURN = dragTurn(V, function (dx, dy) { view.yaw += dx; view.pitch = Math.max(-1.4, Math.min(1.4, view.pitch + dy)); });
     function sync2() {
-      var b = B2.el.querySelector('[data-b="surface"]'); b.textContent = surfTo ? 'Its amino acids' : 'Its smooth shape'; b.disabled = st !== 'real';
+      var b = B2.el.querySelector('[data-b="surface"]'); b.textContent = surfTo ? 'Its amino acids' : 'Its smooth shape'; b.disabled = st !== 'real' || grow < 1;
       B2.press(st === 'real' ? 'real' : null);
-      TURN.enable(st === 'fold' || st === 'other' || st === 'real');
+      TURN.enable((st === 'real' && grow >= 1) || (st !== 'real' && fold >= 1 && !queue.length));
     }
+    /* from the start of sequence `k`: its amino acids apart, not yet joined */
+    function fresh(k) { seq = k; join = 0; fold = 0; appear = 1; view = { yaw: 0, pitch: 0 }; }
     function set(id) {
-      if (id === 'real' || st === 'real') {
-        if (id === 'real' && st !== 'real') { view = { yaw: -.35, pitch: .12 }; surf = surfTo = 0; trace = V.isStill() ? 1 : 0; }
-        was = now = shapeOf(id); k = 1;
-      } else {
-        var f = lerp(was, now, ease(k));
-        if (id === 'other' && st !== 'other') { kinds = S.KINDS2; F = S.FOLD2; f = 0; }
-        else if (id !== 'other' && st === 'other') { kinds = S.KINDS1; F = S.FOLD1; f = 0; }
-        was = f; now = shapeOf(id); k = V.isStill() ? 1 : 0;
+      if (id === 'real') { if (st !== 'real') { view = { yaw: -.35, pitch: .12 }; surf = surfTo = 0; grow = 0; run(['grow']); } }
+      else {
+        if (st === 'real') fresh(1);
+        if (id === 'free') { fresh(1); queue = []; }
+        else if (id === 'chain') { if (seq !== 1) fresh(1); run(fold > 0 ? ['unfold'].concat(join < 1 ? ['join'] : []) : join < 1 ? ['join'] : []); if (fold <= 0) view = { yaw: 0, pitch: 0 }; }
+        else if (id === 'fold') { if (seq !== 1) fresh(1); run((join < 1 ? ['join'] : []).concat(fold < 1 ? ['fold'] : [])); }
+        else if (id === 'other') { fresh(2); appear = 0; run(['appear', 'join', 'fold']); }
       }
-      if (!shapeOf(id) && id !== 'real') view = { yaw: 0, pitch: 0 };
       st = id; V.press(id === 'real' ? null : id); sync2(); V.names(); V.paint();
     }
     return {
       el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); V.press(st); sync2(); }, stop: V.stop, say: 'Press to build a protein; drag to turn a folded protein',
-      credit: 'Drawn for this lab. The real protein is human salivary amylase as measured by X-ray (PDB 1SMD, Ramasubbu et al. 1996; wwPDB, CC0), the same molecule as in the Y7 cell game.',
+      credit: 'Drawn for this lab. The two short chains are folded in the shapes of two stretches of 30 amino acids of human salivary amylase, and the real protein is the whole molecule, as measured by X-ray (PDB 1SMD, Ramasubbu et al. 1996; wwPDB, CC0), the same molecule as in the Y7 cell game.',
       focus: function (part) { if (part === 'aa') set('free'); else if (part === 'chain' || part === 'fold' || part === 'real') set(part); else if (part === 'order') set('other'); }
     };
   });
