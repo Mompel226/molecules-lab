@@ -19,18 +19,24 @@
 
   /* drag sideways to turn; on a phone a finger that moves up or down still scrolls the page (touch-action: pan-y) */
   function dragTurn(V, on) {
-    var el = V.el.querySelector('.mm__screen'); if (!el) return;
-    el.classList.add('is-turnable');
-    var last = null;
-    el.addEventListener('pointerdown', function (e) { last = [e.clientX, e.clientY]; try { el.setPointerCapture(e.pointerId); } catch (x) {} });
-    el.addEventListener('pointermove', function (e) { if (!last) return; on((e.clientX - last[0]) * .012, (e.clientY - last[1]) * .012); last = [e.clientX, e.clientY]; V.paint(); });
+    var el = V.el.querySelector('.mm__screen'); if (!el) return { enable: function () {} };
+    var last = null, live = true;
+    el.addEventListener('pointerdown', function (e) { if (!live) return; last = [e.clientX, e.clientY]; try { el.setPointerCapture(e.pointerId); } catch (x) {} });
+    el.addEventListener('pointermove', function (e) { if (!last || !live) return; on((e.clientX - last[0]) * .012, (e.clientY - last[1]) * .012); last = [e.clientX, e.clientY]; V.paint(); });
     ['pointerup', 'pointercancel'].forEach(function (n) { el.addEventListener(n, function () { last = null; }); });
-    el.setAttribute('tabindex', '0'); el.setAttribute('role', 'slider'); el.setAttribute('aria-label', 'Turn the model: use the left and right arrow keys');
     var hint = document.createElement('span'); hint.className = 'memv__hint'; hint.textContent = 'Drag to turn'; hint.setAttribute('aria-hidden', 'true');
     el.parentNode.appendChild(hint);
     el.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { on(e.key === 'ArrowLeft' ? -.2 : .2, 0); V.paint(); e.preventDefault(); }
+      if (live && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { on(e.key === 'ArrowLeft' ? -.2 : .2, 0); V.paint(); e.preventDefault(); }
     });
+    /* a picture that cannot turn at this moment does not promise a drag */
+    function enable(yes) {
+      live = !!yes; last = null; hint.hidden = !live; el.classList.toggle('is-turnable', live);
+      if (live) { el.setAttribute('tabindex', '0'); el.setAttribute('role', 'slider'); el.setAttribute('aria-label', 'Turn the model: use the left and right arrow keys'); }
+      else { el.removeAttribute('tabindex'); el.removeAttribute('role'); el.removeAttribute('aria-label'); }
+    }
+    enable(true);
+    return { enable: enable };
   }
   function bar(V, label, items, click) {
     var b = document.createElement('div'); b.className = 'vbar memv__bar memv__bar--2'; b.setAttribute('role', 'group'); b.setAttribute('aria-label', label);
@@ -88,42 +94,122 @@
     var P = S.POLY, W = P.W, H = P.H, from = P.scatter, to = P.scatter, k = 1, cur = 'glucose', amb = 0;
     var LAY = { glucose: P.scatter, starch: P.starch, glycogen: P.glycogen, cellulose: P.cellulose };
     var WHERE = { glucose: 'dissolved in cytoplasm and blood', starch: 'a store in plant cells', glycogen: 'a store in liver and muscle cells', cellulose: 'the cell walls of plants' };
+    /* Inside starch: an extension, opened only from Starch. Each state says its level and what IGCSE needs (Daniel, 24 Nov 2026) */
+    var sub = null, was = null, sk = 1, spin = .18, iod = 1;
+    var LEVEL = {
+      two: ['Beyond the syllabus:', 'two kinds of molecule. For IGCSE: starch is made from glucose'],
+      amylose: ['IB Biology:', 'a coiled chain. For IGCSE: starch is made from glucose'],
+      amylopectin: ['IB Biology:', 'a branched chain. For IGCSE: starch is made from glucose'],
+      iodine: ['Beyond IB:', 'iodine in the helix. For IGCSE: starch is made from glucose and turns iodine blue-black']
+    };
+    var GROUP = { two: 'inside', amylose: 'amylose', amylopectin: 'amylopectin', iodine: 'iodhelix' };
+    function helixBox(cx, cy, sc) { var q = []; for (var i = 0; i < S.AMY.n; i++) { var a = S.amyAt(i, spin, cx, cy, sc); q.push([a.x, a.y]); } return S.boxOf(q, S.AMY.r * sc + 7); }
+    function scaledBox(lay, ox, oy, z) { return S.boxOf(lay.p.map(function (q) { return [ox + (q[0] - W / 2) * z, oy + (q[1] - H / 2) * z]; }), lay.r * z + 8); }
+    function well(c, x, y, col, text) {
+      c.beginPath(); c.ellipse(x, y, 40, 37, 0, 0, TAU);
+      var g = c.createRadialGradient(x, y - 14, 4, x, y, 40); g.addColorStop(0, '#FFFFFF'); g.addColorStop(1, '#C9D0D9');
+      c.fillStyle = g; c.fill(); c.strokeStyle = '#A4AFBC'; c.lineWidth = 1; c.stroke();
+      c.beginPath(); c.ellipse(x, y + 2, 28, 26, 0, 0, TAU); c.fillStyle = col; c.fill();
+      c.beginPath(); c.ellipse(x - 9, y - 9, 7, 4, -.5, 0, TAU); c.fillStyle = 'rgba(255,255,255,.4)'; c.fill();
+      c.fillStyle = '#10202E'; c.font = '600 ' + D.textSize(c, 13) + 'px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, x, y + 54);
+    }
+    function paintSub(c, id) {
+      if (id === 'two') {
+        S.drawAmylose(c, W / 2, 94, .9, spin); S.drawBox(c, helixBox(W / 2, 94, .9), 1);
+        c.save(); c.translate(W / 2, 272); c.scale(.74, .74); c.translate(-W / 2, -H / 2); S.drawPoly(c, P.amylopectin, P.amylopectin, 1, 0, 0); c.restore();
+        S.drawBox(c, scaledBox(P.amylopectin, W / 2, 272, .74), 1);
+      } else if (id === 'amylose') {
+        S.drawAmylose(c, W / 2, H / 2, 1.4, spin); S.drawBox(c, helixBox(W / 2, H / 2, 1.4), 1);
+      } else if (id === 'amylopectin') {
+        S.drawPoly(c, P.amylopectin, P.amylopectin, 1, 0, 0); S.drawBox(c, S.polyBox(P.amylopectin), 1);
+      } else {
+        S.drawAmylose(c, W / 2, 124, 1.16, spin, iod);
+        D.tile(c, 96, 244, 368, 146);
+        var turnK = ease(seg(iod, .62, 1));
+        well(c, 192, 298, C.iodine, 'iodine alone'); well(c, 368, 298, D.mixHex(C.iodine, C.blueBlack, turnK), 'with starch');
+      }
+    }
+    function subLabels(id) {
+      if (id === 'two') { var a = helixBox(W / 2, 94, .9), b = scaledBox(P.amylopectin, W / 2, 272, .74); return [{ id: 'a', text: 'amylose', x: a.cx, y: a.y, side: 'T' }, { id: 'b', text: 'amylopectin', x: b.cx, y: b.y + b.h, side: 'B' }]; }
+      if (id === 'amylose') { var h = helixBox(W / 2, H / 2, 1.4); return [{ id: 'a', text: 'amylose: a helix', x: h.cx, y: h.y, side: 'T' }]; }
+      if (id === 'amylopectin') { var q = S.polyBox(P.amylopectin); return [{ id: 'b', text: 'amylopectin: a chain with branches', x: q.cx, y: q.y, side: 'T' }]; }
+      if (iod < 1) return [];
+      /* the name's line ends on the iodine atom with the fewest rings above it */
+      var R = [], best = null; for (var i = 0; i < S.AMY.n; i++) R.push(S.amyAt(i, spin, W / 2, 124, 1.16));
+      S.iodineAtoms(1, W / 2, 124, 1.16).forEach(function (t) {
+        var over = R.filter(function (o) { return o.z > t.z && o.y < t.y && Math.abs(o.x - t.x) < S.AMY.r * 1.16 + 2; }).length;
+        if (!best || over < best.over) best = { over: over, x: t.x, y: t.y };
+      });
+      return [{ id: 'i', text: 'iodine inside the helix', x: best.x, y: best.y - 5, side: 'T' }];
+    }
     var scene = {
       W: W, H: H,
-      tick: function (dt) { amb += dt; if (k < 1) k = Math.min(1, k + dt / 2.6); },
+      tick: function (dt) {
+        amb += dt; if (k < 1) k = Math.min(1, k + dt / 2.6);
+        if (sk < 1) sk = Math.min(1, sk + dt / .55);
+        else if (sub === 'iodine' && iod < 1) iod = Math.min(1, iod + dt / 3.6);
+      },
       draw: function (c) {
         D.frame(c, 0, 0, W, H, 16, function () {
           D.ground(c, 0, 0, W, H);
-          S.polyVia(c, from, to, k, amb);
-          if (k >= 1 && cur !== 'glucose') S.drawBox(c, S.polyBox(LAY[cur]), 1);
+          /* one picture leaves before the next arrives */
+          var id = sk < .5 ? was : sub;
+          if (id) paintSub(c, id);
+          else { S.polyVia(c, from, to, k, amb); if (k >= 1 && cur !== 'glucose') S.drawBox(c, S.polyBox(LAY[cur]), 1); }
+          if (sk < 1) { c.globalAlpha = 1 - Math.abs(2 * sk - 1); D.ground(c, 0, 0, W, H); c.globalAlpha = 1; }
         });
       },
       labels: function () {
+        if (sk < 1) return [];
+        if (sub) return subLabels(sub);
         if (k < 1) return [];
         if (cur === 'glucose') return [{ id: 'g', text: 'one glucose molecule', x: P.scatter.p[6][0], y: P.scatter.p[6][1] - 8, side: 'T' }];
         var b = S.polyBox(LAY[cur]);
         return [{ id: cur, text: cur, x: b.cx, y: b.y, side: 'T' }];
       },
-      read: function (pill) { pill('w', WHERE[cur]); }
+      read: function (pill) { if (sub) pill('w', LEVEL[sub][1], 'ext', LEVEL[sub][0]); else pill('w', WHERE[cur], '', 'Where:'); }
     };
+    var ONE = 'one glucose molecule', LINK = 'link between two glucose molecules', CROSS = 'links between the chains', IOD = 'iodine atom';
     var V = MV({
-      scene: scene, aria: 'Glucose molecules, shown separate, or joined as starch, glycogen or cellulose.',
+      scene: scene, aria: 'Glucose molecules, shown separate, or joined as starch, glycogen or cellulose. From starch, an extension shows its two kinds of molecule, amylose and amylopectin, and iodine held inside the helix of amylose.',
       barLabel: 'The molecule', buttons: [['glucose', 'Glucose'], ['starch', 'Starch'], ['glycogen', 'Glycogen'], ['cellulose', 'Cellulose']],
       read: [['w', 'Where:']], liveNames: true,
-      key: { all: [['glucose', 'one glucose molecule'], ['linked', 'link between two glucose molecules'], ['hbond', 'links between the chains']],
-             sets: [['one glucose molecule'], ['one glucose molecule', 'link between two glucose molecules'], ['one glucose molecule', 'link between two glucose molecules', 'links between the chains']],
-             now: function () { return cur === 'glucose' ? ['one glucose molecule'] : cur === 'cellulose' ? ['one glucose molecule', 'link between two glucose molecules', 'links between the chains'] : ['one glucose molecule', 'link between two glucose molecules']; } },
+      key: { all: [['glucose', ONE], ['linked', LINK], ['hbond', CROSS], ['iodineAt', IOD]],
+             sets: [[ONE], [ONE, LINK], [ONE, LINK, CROSS], [ONE, LINK, IOD]],
+             now: function () { return sub === 'iodine' ? [ONE, LINK, IOD] : sub ? [ONE, LINK] : cur === 'glucose' ? [ONE] : cur === 'cellulose' ? [ONE, LINK, CROSS] : [ONE, LINK]; } },
       onButton: function (id) { set(id); ctx.pick(id, { stay: true }); }
     });
-    function set(id) {
-      if (id === cur && k >= 1) { V.press(id); return; }
-      var o = LAY[id]; from = k >= .5 ? to : from; to = o; k = V.isStill() ? 1 : 0; cur = id; V.press(id); V.names(); V.paint();
+    var B2 = bar(V, 'Inside starch: an extension', [['inside', 'Inside starch (extension)'], ['two', 'Two kinds'], ['amylose', 'Amylose'], ['amylopectin', 'Amylopectin'], ['iodine', 'Iodine']], function (id) { var t = id === 'inside' ? 'two' : id; show(t); ctx.pick(GROUP[t], { stay: true }); });
+    var B2b = {}; Array.prototype.forEach.call(B2.el.querySelectorAll('button'), function (x) { x.classList.add('memv__btn--ext'); B2b[x.getAttribute('data-b')] = x; });
+    var TURN = dragTurn(V, function (dx) { spin -= dx; });
+    function bar2() {
+      /* the row keeps its place, so the picture does not jump when Starch is pressed */
+      B2.el.style.visibility = cur === 'starch' ? '' : 'hidden';
+      Object.keys(B2b).forEach(function (q) { B2b[q].hidden = q === 'inside' ? !!sub : !sub; });
+      B2.press(sub);
+      TURN.enable(sub === 'amylose' || sub === 'iodine');
     }
+    function show(id) {
+      if (id === sub && id !== 'iodine') return;
+      was = sub; sub = id; sk = V.isStill() || was === id ? 1 : 0;
+      if (id === 'iodine') iod = V.isStill() ? 1 : 0;
+      bar2(); V.names(); V.paint();
+    }
+    function set(id) {
+      if (sub) { was = sub; sub = null; sk = V.isStill() ? 1 : 0; }
+      if (id === cur && k >= 1) { V.press(id); bar2(); V.names(); V.paint(); return; }
+      var o = LAY[id]; from = k >= .5 ? to : from; to = o; k = V.isStill() ? 1 : 0; cur = id; V.press(id); bar2(); V.names(); V.paint();
+    }
+    function toStarch() { if (cur !== 'starch') { cur = 'starch'; from = to = LAY.starch; k = 1; V.press('starch'); } }
     return {
-      el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); V.press(cur); }, stop: V.stop,
+      el: V.el, tight: V.el.querySelector('.memv__fig'), start: function () { V.start(); V.press(cur); bar2(); }, stop: V.stop,
       say: '46 glucose molecules in every picture',
       credit: 'Drawn for this lab. A real molecule of starch holds thousands of glucose molecules.',
-      focus: function (part) { if (LAY[part]) set(part); else if (part === 'large') set('starch'); }
+      focus: function (part) {
+        if (LAY[part]) set(part); else if (part === 'large') set('starch');
+        else if (part === 'inside') { toStarch(); show('two'); } else if (part === 'amylose' || part === 'amylopectin') { toStarch(); show(part); }
+        else if (part === 'iodhelix') { toStarch(); show('iodine'); }
+      }
     };
   });
 
@@ -249,6 +335,8 @@
   /* ======================================================================= DNA */
   Views.add('dnav', function (spec, ctx) {
     var W = 560, H = 400, SEQ = 'ATGCCGTACGATTGCA', mode = 'helix', tw = 1, target = 1, turn = .55, G0 = D.dnaGeom(0), SX = G0.dx;
+    /* a pair is marked as a pair: one outline round its two bases */
+    function pairBox(q) { var cx = (W - 15 * SX) / 2 + q * SX, hw = SX * .46; return { x: cx - hw, y: H / 2 - G0.R - 11, w: hw * 2, h: 2 * G0.R + 22, cx: cx }; }
     var scene = {
       W: W, H: H,
       tick: function (dt) { if (tw !== target) { var d = dt / 1.6; tw = tw < target ? Math.min(target, tw + d) : Math.max(target, tw - d); } },
@@ -257,9 +345,10 @@
           D.ground(c, 0, 0, W, H);
           var e = ease(tw), n = SEQ.length, g = D.dnaGeom(e);
           c.save(); c.translate(W / 2, H / 2); c.scale(g.cam, g.cam); c.translate(-W / 2, -H / 2);
-          D.helix(c, { seq: SEQ, x0: W / 2 - (n - 1) * g.dx / 2, y: H / 2, dx: g.dx, R: g.R, w: 6 / g.cam, cam: g.cam, twist: e, turn: turn * e, second: 1,
-                       show: { bonds: mode === 'bonds' || mode === 'pairs', letters: e < .3 }, dimBases: mode === 'strands' });
+          D.helix(c, { seq: SEQ, x0: W / 2 - (n - 1) * g.dx / 2, y: H / 2, dx: g.dx, R: g.R, w: 8.4 / g.cam, cam: g.cam, twist: e, turn: turn * e, second: 1,
+                       show: { bonds: mode === 'bonds' || mode === 'pairs' || mode === 'helix', letters: e < .3 }, dimBases: mode === 'strands' });
           c.restore();
+          if (mode === 'pairs' && tw === target) [0, 3].forEach(function (q) { S.drawBox(c, pairBox(q), 1); });
         });
       },
       labels: function () {
@@ -267,8 +356,8 @@
         if (tw !== target) return [];
         if (mode === 'strands') return [{ id: 's1', text: 'strand 1', x: x + 2 * SX, y: H / 2 - G0.R, side: 'T' }, { id: 's2', text: 'strand 2', x: x + 13 * SX, y: H / 2 + G0.R, side: 'B' }];
         if (mode === 'bases') return [{ id: 'b', text: 'one base', x: x + 5 * SX, y: H / 2 - up, side: 'T' }];
-        if (mode === 'bonds') return [{ id: 'b', text: 'bonds between the bases', x: x + 8 * SX + SX * .68 * .3, y: H / 2 - 3, side: 'T'   /* on the third bond of this C–G pair, beside the letter */ }];
-        if (mode === 'pairs') return [{ id: 'at', text: 'A with T', x: x, y: H / 2 - up, side: 'T' }, { id: 'cg', text: 'C with G', x: x + 3 * SX, y: H / 2 - up, side: 'T' }];
+        if (mode === 'bonds') return [{ id: 'b', text: 'bonds between the bases', x: x + 8 * SX + SX * .66 * .34, y: H / 2 - G0.R * .12, side: 'T'   /* on the third bond of this C–G pair, beside the letter */ }];
+        if (mode === 'pairs') return [{ id: 'at', text: 'A with T', x: x, y: pairBox(0).y, side: 'T' }, { id: 'cg', text: 'C with G', x: x + 3 * SX, y: pairBox(3).y, side: 'T' }];
         return [];
       },
       read: function (pill) { pill('s', mode === 'helix' ? 'two strands coiled together' : mode === 'strands' ? 'two strands' : mode === 'bases' ? 'each strand contains bases' : mode === 'bonds' ? 'bonds hold the strands together' : 'A with T, C with G'); }
@@ -278,14 +367,14 @@
       barLabel: 'What to show', buttons: [['helix', 'Double helix'], ['strands', 'Strands'], ['bases', 'Bases'], ['bonds', 'Bonds'], ['pairs', 'Pairs']], read: [['s', 'Shown:']],
       key: { all: [['strand', 'strand'], ['bases', 'bases', null, 'ATCG'], ['hbond', 'bonds between the bases']],
              sets: [['strand', 'bases', 'bonds between the bases']],
-             now: function () { var a = ['strand', 'bases']; if (mode === 'bonds' || mode === 'pairs') a.push('bonds between the bases'); return a; } },
+             now: function () { var a = ['strand', 'bases']; if (mode === 'bonds' || mode === 'pairs' || mode === 'helix') a.push('bonds between the bases'); return a; } },
       onButton: function (id) { set(id); ctx.pick(id, { stay: true }); }
     });
-    dragTurn(V, function (dx) { turn += dx; });
+    var TURN = dragTurn(V, function (dx) { turn += dx; });
     function set(id) {
       mode = id; target = id === 'helix' ? 1 : 0; if (V.isStill()) tw = target;
       /* only the coiled helix turns: the flat ladder does not promise a drag */
-      var hint = V.el.querySelector('.memv__hint'); if (hint) hint.hidden = id !== 'helix';
+      TURN.enable(id === 'helix');
       V.press(id); V.names(); V.paint();
     }
     return {
@@ -297,9 +386,10 @@
 
   /* ======================================================================= the tests on the left: a tube pair, with a press */
   function tag(c, x, y, text, w) {
-    c.font = '600 12px Inter, system-ui, sans-serif'; var tw = w || c.measureText(text).width + 14;
-    c.fillStyle = '#FFFFFF'; D.rr(c, x - tw / 2, y, tw, 20, 5); c.fill(); c.strokeStyle = '#A9B6C2'; c.lineWidth = 1; c.stroke();
-    c.fillStyle = '#10202E'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, x, y + 10.5);
+    var fs = D.textSize(c, 12), hh = 20 * fs / 12;
+    c.font = '600 ' + fs + 'px Inter, system-ui, sans-serif'; var tw = Math.max(w || 0, c.measureText(text).width + 10 * fs / 12);
+    c.fillStyle = '#FFFFFF'; D.rr(c, x - tw / 2, y, tw, hh, 5); c.fill(); c.strokeStyle = '#A9B6C2'; c.lineWidth = 1; c.stroke();
+    c.fillStyle = '#10202E'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, x, y + hh / 2 + .5);
   }
 
   /* ---------- iodine on a spotting tile; Benedict's before and after heating ---------- */
@@ -325,7 +415,7 @@
               var col = D.mixHex(f.look.col, T.positive('iodine', w[0]) ? C.blueBlack : C.iodine, Math.max(drop * .6, ch));
               c.beginPath(); c.ellipse(x, y + 3, 42, 40, 0, 0, TAU); c.fillStyle = col; c.fill();
               c.beginPath(); c.ellipse(x - 14, y - 14, 11, 6, -.5, 0, TAU); c.fillStyle = 'rgba(255,255,255,.4)'; c.fill();
-              c.fillStyle = '#10202E'; c.font = '600 14px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+              c.fillStyle = '#10202E'; c.font = '600 ' + D.textSize(c, 14) + 'px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
               c.fillText(w[1], x, y + 84);
             });
           } else {

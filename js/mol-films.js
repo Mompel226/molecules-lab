@@ -86,6 +86,10 @@
       if (lens.length > 1) { tree(e, dir - G.l[lv], lens.slice(1), 'c', lv + 1); tree(e, dir + G.r[lv], lens.slice(1), 'b', lv + 1); }
     }
     tree(0, G.a0, [5, 3, 3], 'c', 0); tree(0, G.a0 + G.root, [4, 3, 3], 'b', 0);
+    /* amylopectin, one of the two molecules in starch: a chain with branches from carbon 6, far fewer than in glycogen */
+    var amylo = empty(6.6); amylo.p = wave(86, 470, 104, .9, .2, 21 * d);
+    for (var l9 = 1; l9 < 22; l9++) amylo.links.push([l9 - 1, l9, 'c']);
+    branch(amylo, 4, .95, 8, .03); branch(amylo, 11, .95, 8, -.02); branch(amylo, 17, .95, 8, .03);
     /* cellulose: straight chains side by side; every second ring is turned over; links between the chains */
     var cel = empty(12); cel.cross = [];
     var rows = [12, 11, 12, 11], k2 = 0, rowY = [H / 2 - 93, H / 2 - 31, H / 2 + 31, H / 2 + 93], first = [], sp = 41;
@@ -98,11 +102,11 @@
       var n1 = rows[r1], n2 = rows[r1 + 1];
       for (var j1 = 0; j1 < Math.min(n1, n2); j1 += 2) cel.cross.push([first[r1] + j1 + (n1 > n2 ? 1 : 0), first[r1 + 1] + j1 + (n2 > n1 ? 1 : 0)]);
     }
-    if ([chain, starch, gly, cel].some(function (m) { return m.p.length !== N; })) throw new Error('polymer layouts must have ' + N + ' rings: ' + [chain.p.length, starch.p.length, gly.p.length, cel.p.length]);
+    if ([chain, starch, gly, cel, amylo].some(function (m) { return m.p.length !== N; })) throw new Error('polymer layouts must have ' + N + ' rings: ' + [chain.p.length, starch.p.length, gly.p.length, cel.p.length, amylo.p.length]);
     /* the ring at the tip of the top branch of glycogen: its name's line ends here, over no other ring */
     var tip = 0; gly.p.forEach(function (p, ix) { if (p[1] < gly.p[tip][1]) tip = ix; });
     gly.tip = tip;
-    return { W: W, H: H, N: N, scatter: scatter, chain: chain, starch: starch, glycogen: gly, cellulose: cel };
+    return { W: W, H: H, N: N, scatter: scatter, chain: chain, starch: starch, glycogen: gly, cellulose: cel, amylopectin: amylo };
   })();
   function turnBy(a, b) { var q = (b - a) % TAU; if (q > Math.PI) q -= TAU; if (q < -Math.PI) q += TAU; return q; }
   /* draw the rings at the moment k (0…1) of the move from layout a to layout b; drift: small movement of free molecules */
@@ -144,6 +148,65 @@
     D.rr(c, b.x, b.y, b.w, b.h, 14); c.stroke(); c.setLineDash([]);
   }
   function polyBox(lay) { return boxOf(lay.p, lay.r + 9); }
+  /* ======================================================================= amylose, the other molecule in starch
+     One chain with no branches, coiled into a left-handed helix of six glucose molecules to a turn, hollow along its axis.
+     The picture looks along the helix at an angle, so each turn is seen as a loop and the hollow can be seen. */
+  var AMY = { n: 36, perTurn: 6, R: 48, dx: 12.6, r: 9.6, tilt: .95 };
+  function amyAt(i, spin, cx, cy, sc) {
+    var th = spin - i * TAU / AMY.perTurn, X = (i - (AMY.n - 1) / 2) * AMY.dx, Y = AMY.R * Math.cos(th), Z = AMY.R * Math.sin(th), cb = Math.cos(AMY.tilt), sb = Math.sin(AMY.tilt);
+    return { x: cx + (X * cb + Z * sb) * sc, y: cy - Y * sc, z: -X * sb + Z * cb, front: Math.sin(th) };
+  }
+  /* the iodine: five short chains of atoms along the axis; `k` 0…1 how far they have moved into the helix from its open end */
+  function iodineAtoms(k, cx, cy, sc) {
+    var out = [], cb = Math.cos(AMY.tilt), sb = Math.sin(AMY.tilt);
+    for (var g = 0; g < 5; g++) {
+      var e = ease(clamp(k * 1.5 - (4 - g) * .12));
+      for (var a = 0; a < 5; a++) {
+        var X = -137 + g * 70 + a * 11.5 + (1 - e) * 560;   /* the gaps between the chains fall between the front rings, so the short chains can be seen */
+        out.push({ x: cx + X * cb * sc, y: cy, z: -X * sb, g: g });
+      }
+    }
+    return out;
+  }
+  var IODINE = ['#D6D8F2', '#4A4E96', '#16173A'];
+  function drawAmylose(c, cx, cy, sc, spin, iod) {
+    var P = [], items = [], r = AMY.r * sc, lw = Math.max(2.2, 3.4 * sc), NIGHT = '#132A40';
+    for (var i = 0; i < AMY.n; i++) {
+      var q0 = amyAt(i, spin, cx, cy, sc), a0 = amyAt(i - .12, spin, cx, cy, sc), b0 = amyAt(i + .12, spin, cx, cy, sc);
+      q0.rot = Math.atan2(b0.y - a0.y, b0.x - a0.x) + Math.PI; P.push(q0);
+    }
+    P.forEach(function (q, j) {
+      /* each ring is opaque, so what lies behind it does not show through; the far side of the coil is darker */
+      items.push({ z: q.z, f: function () {
+        var rr = r * (.88 + .12 * q.front), v;
+        c.beginPath();
+        for (v = 0; v < 6; v++) { var an = q.rot + v * TAU / 6; c[v ? 'lineTo' : 'moveTo'](q.x + rr * Math.cos(an), q.y + rr * Math.sin(an)); }
+        c.closePath(); c.fillStyle = '#1B3044'; c.fill();
+        D.glc(c, q.x, q.y, rr, q.rot);
+        c.beginPath();
+        for (v = 0; v < 6; v++) { var am = q.rot + v * TAU / 6; c[v ? 'lineTo' : 'moveTo'](q.x + (rr + 1.3) * Math.cos(am), q.y + (rr + 1.3) * Math.sin(am)); }
+        c.closePath(); c.fillStyle = 'rgba(19,42,64,' + ((1 - q.front) * .3).toFixed(3) + ')'; c.fill();
+      } });
+      if (j === AMY.n - 1) return;
+      /* the link follows the curve of the coil, from the edge of one ring to the edge of the next, through its oxygen */
+      for (var m = 0; m < 6; m++) (function (m) {
+        var A = amyAt(j + .2 + .6 * m / 6, spin, cx, cy, sc), B = amyAt(j + .2 + .6 * (m + 1) / 6, spin, cx, cy, sc);
+        items.push({ z: (A.z + B.z) / 2, f: function () {
+          var dx = B.x - A.x, dy = B.y - A.y, l = Math.sqrt(dx * dx + dy * dy) || 1, ex = dx / l, ey = dy / l, k = (1 - (A.front + B.front) / 2) * .3;
+          c.lineCap = 'butt';
+          c.strokeStyle = D.mixHex(C.sugarLo, NIGHT, k); c.lineWidth = lw + 1.4; c.beginPath(); c.moveTo(A.x - ex * .4, A.y - ey * .4); c.lineTo(B.x + ex * .4, B.y + ey * .4); c.stroke();
+          c.strokeStyle = D.mixHex(C.sugar, NIGHT, k); c.lineWidth = lw; c.beginPath(); c.moveTo(A.x - ex * .9, A.y - ey * .9); c.lineTo(B.x + ex * .9, B.y + ey * .9); c.stroke();
+        } });
+      })(m);
+      var O = amyAt(j + .5, spin, cx, cy, sc);
+      items.push({ z: O.z + .01, f: function () { D.ball(c, O.x, O.y, Math.max(1.8, 2.7 * sc), C.O); } });
+    });
+    if (iod != null) iodineAtoms(iod, cx, cy, sc).forEach(function (q) { items.push({ z: q.z, f: function () { D.ball(c, q.x, q.y, 5.6 * sc, IODINE); } }); });
+    items.sort(function (a, b) { return a.z - b.z; });
+    items.forEach(function (it) { it.f(); });
+    c.lineCap = 'round';
+    return P;
+  }
   /* one large molecule never changes into another: its glucose molecules separate first, then join in the new way */
   function polyVia(c, a, b, k, amb) {
     var F = POLY.scatter;
@@ -213,7 +276,7 @@
   var KINDS1 = [], KINDS2 = [];
   (function () { var R = D.rng(23), S = D.rng(77); for (var i = 0; i < 34; i++) { KINDS1.push(Math.floor(R() * 20)); KINDS2.push(Math.floor(S() * 20)); } })();
   var FOLD1 = foldOf(5, 34, .55, 1.5), FOLD2 = foldOf(19, 34, 1.5, .5);
-  global.MolShapes = { POLY: POLY, drawPoly: drawPoly, polyVia: polyVia, boxOf: boxOf, drawBox: drawBox, polyBox: polyBox, foldOf: foldOf, chainAt: chainAt, drawChain: drawChain, KINDS1: KINDS1, KINDS2: KINDS2, FOLD1: FOLD1, FOLD2: FOLD2 };
+  global.MolShapes = { POLY: POLY, drawPoly: drawPoly, polyVia: polyVia, AMY: AMY, amyAt: amyAt, iodineAtoms: iodineAtoms, drawAmylose: drawAmylose, boxOf: boxOf, drawBox: drawBox, polyBox: polyBox, foldOf: foldOf, chainAt: chainAt, drawChain: drawChain, KINDS1: KINDS1, KINDS2: KINDS2, FOLD1: FOLD1, FOLD2: FOLD2 };
 
   /* ==================================================================================== 1. from a chain to its atoms */
   L.add('atomsfilm', Film({
@@ -226,7 +289,7 @@
       { t: 0, still: 3.6, h: 'A large molecule', p: [['ig', 'This is part of one molecule of **starch**. It is a very long chain.']] },
       { t: 4, still: 8.8, h: 'A smaller molecule', p: [['ig', 'The chain is made of many smaller molecules joined together. Each ring is one **glucose** molecule.']] },
       { t: 9, still: 13.6, h: 'Atoms', p: [['ig', 'A molecule is made of **atoms**. In one glucose molecule, atoms of three **elements** are joined together.']] },
-      { t: 14, still: 20.6, h: 'Three elements', p: [['ig', 'Glucose contains **carbon**, **hydrogen** and **oxygen**: 6 carbon, 12 hydrogen and 6 oxygen atoms.'], ['ib', 'Its formula is C₆H₁₂O₆.']] }   /* IB B1.1.4 */
+      { t: 14, still: 20.6, h: 'Three elements', p: [['ig', 'Glucose contains **carbon**, **hydrogen** and **oxygen**: 6 carbon, 12 hydrogen and 6 oxygen atoms.'], ['ig', 'Its formula is C₆H₁₂O₆.']] }   /* 0610: 6.1 and 12.2, the balanced equations */
     ],
     make: function () {
       var W = 560, H = 400, M = D.MODELS.glucose, r0 = 13, sp = 37, n = 19, mid = 9;
@@ -275,9 +338,9 @@
     steps: [
       { t: 0, still: 4, h: 'Glucose', p: [['ig', 'Each ring is one **glucose** molecule. Glucose is a small, soluble molecule.']] },
       { t: 4.5, still: 9.6, h: 'Glucose molecules join', p: [['ig', 'Many glucose molecules join in a chain and make one **large molecule**.']] },
-      { t: 10, still: 16, h: 'Starch', p: [['ig', '**Starch** is made from glucose. It is the store of carbohydrate in **plants**.'], ['bey', 'Its chains are coiled or branched.']] },
+      { t: 10, still: 16, h: 'Starch', p: [['ig', '**Starch** is made from glucose. It is the store of carbohydrate in **plants**.'], ['ib', 'Its chains are coiled or branched.']] },
       { t: 16.5, still: 22.5, h: 'Glycogen', p: [['ig', '**Glycogen** is made from glucose. It is the store of carbohydrate in **animals**, in the liver and the muscles.'], ['bey', 'It has many more branches than starch.']] },
-      { t: 23, still: 29, h: 'Cellulose', p: [['ig', '**Cellulose** is made from glucose. It makes the **cell walls** of plants.'], ['bey', 'Its straight chains lie side by side, which makes a strong fibre.']] }
+      { t: 23, still: 29, h: 'Cellulose', p: [['ig', '**Cellulose** is made from glucose. It makes the **cell walls** of plants.'], ['ib', 'Its straight chains lie side by side, which makes a strong fibre.']] }
     ],
     make: function () {
       var W = POLY.W, H = POLY.H;
@@ -320,7 +383,7 @@
     steps: [
       { t: 0, still: 4.2, h: 'The two kinds of small molecule', p: [['ig', 'A fat or an oil is made from two kinds of smaller molecule: **glycerol** and **fatty acids**.']] },
       { t: 4.5, still: 10.8, h: 'Three fatty acids join', p: [['ig', '**Three** fatty acids join to **one** glycerol.'], ['ib', 'Each join is a condensation reaction that releases a molecule of water.']] },   /* IB B1.1.9 */
-      { t: 11, still: 16.6, h: 'One fat molecule', p: [['ig', 'The result is one molecule of **fat** (or oil). Fats and oils contain carbon, hydrogen and oxygen.'], ['bey', 'Chemists call this molecule a triglyceride.']] }
+      { t: 11, still: 16.6, h: 'One fat molecule', p: [['ig', 'The result is one molecule of **fat** (or oil). Fats and oils contain carbon, hydrogen and oxygen.'], ['ib', 'This molecule is called a triglyceride.']] }
     ],
     make: function () {
       var W = 560, H = 400, gx = 136, gy = H / 2, gh = 214, gw = 36, ys = [gy - 76, gy, gy + 76], n = 15, step = 18;
@@ -445,7 +508,7 @@
         draw: function (c, t) {
           var sec = seg(t, 4.8, 9.6), g = geo(t);
           c.save(); c.translate(W / 2, H / 2); c.scale(g.cam, g.cam); c.translate(-W / 2, -H / 2);
-          D.helix(c, { seq: DNA_SEQ, x0: g.x0, y: H / 2, dx: g.dx, R: g.R, w: 6 / g.cam, cam: g.cam, twist: g.tw, turn: g.tw * .55, second: t < 4.8 ? 0 : sec, secondOff: 130,
+          D.helix(c, { seq: DNA_SEQ, x0: g.x0, y: H / 2, dx: g.dx, R: g.R, w: 8.4 / g.cam, cam: g.cam, twist: g.tw, turn: g.tw * .55, second: t < 4.8 ? 0 : sec, secondOff: 130,
                        show: { bonds: t >= 11.2, letters: g.tw < .32 }, bondAlpha: seg(t, 11.2, 12.6) * .95 });
           c.restore();
         },
@@ -457,7 +520,7 @@
           }
           if (t >= 21.6) {
             /* the name's line ends on the upper strand, at a pair where it lies at its highest */
-            var j = 5, a = g.tw * j * TAU / 10 + .55, yy = H / 2 + g.R * Math.cos(a) * g.cam, xx = W / 2 + (j - (n - 1) / 2) * g.dx * g.cam;
+            var j = 0, top = 1e9; for (var q = 4; q < 11; q++) { var th = g.tw * q * TAU / 10 + .55, ty = H / 2 - g.R * Math.cos(th) * g.cam; if (ty < top) { top = ty; j = q; } } var yy = top, xx = W / 2 + (j - (n - 1) / 2) * g.dx * g.cam;
             it.push({ id: 'h', text: 'double helix', x: xx, y: yy, side: 'T' });
           }
           return it;
@@ -558,7 +621,7 @@
               D.tube(c, x, TY, TW, TH, dry ? null : { col: unf ? '#D9D2B3' : 'rgba(240,235,205,.26)', level: .46 * k + .001, cloud: unf ? .45 : 0, bits: unf && k > .5 ? 12 : 0, bitsCol: 'rgba(120,100,60,.55)' });
               if (dry && k > 0) { c.fillStyle = '#D6C99F'; [[-10, -13], [8, -11], [-1, -21]].forEach(function (q) { c.beginPath(); c.arc(x + q[0], TY + TH + q[1] + (1 - k) * -40, 6.6, 0, TAU); c.fill(); }); }
               c.fillStyle = '#F4F7FA'; D.rr(c, x - 44, TY - 32, 88, 24, 5); c.fill();
-              c.fillStyle = '#10202E'; c.font = '600 13px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(names[i], x, TY - 19.5);
+              c.fillStyle = '#10202E'; c.font = '600 ' + D.textSize(c, 13, 10) + 'px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(names[i], x, TY - 19.5);
             });
             c.globalAlpha = 1;
           }
@@ -589,9 +652,10 @@
     for (var k = 0; k < 3; k++) { var t0 = a + k * .46, u = seg(t, t0, t0 + .42); if (u > 0 && u < 1) D.drop(c, x, lerp(y0, y1, u * u), col); }
   }
   function tag(c, x, y, text) {
-    c.font = '600 12px Inter, system-ui, sans-serif'; var w = c.measureText(text).width + 14;
-    c.fillStyle = '#FFFFFF'; D.rr(c, x - w / 2, y, w, 20, 5); c.fill(); c.strokeStyle = '#A9B6C2'; c.lineWidth = 1; c.stroke();
-    c.fillStyle = '#10202E'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, x, y + 10.5);
+    var fs = D.textSize(c, 12), hh = 20 * fs / 12;
+    c.font = '600 ' + fs + 'px Inter, system-ui, sans-serif'; var w = c.measureText(text).width + 14 * fs / 12;
+    c.fillStyle = '#FFFFFF'; D.rr(c, x - w / 2, y, w, hh, 5); c.fill(); c.strokeStyle = '#A9B6C2'; c.lineWidth = 1; c.stroke();
+    c.fillStyle = '#10202E'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, x, y + hh / 2 + .5);
   }
   function twoTubes(cfg) {
     var W = 560, H = 420, X1 = 170, X2 = 390, Y = 84, TW = 78, TH = 226, RY = 213, BY = 176, BH = 176, BW = 460;
@@ -664,7 +728,7 @@
         var names = ['blue', 'green', 'yellow', 'orange', 'brick red'], bw = 74, x0 = 280 - bw * 2.5, y0 = 22;
         names.forEach(function (n, i) {
           c.fillStyle = C.ben[i]; D.rr(c, x0 + i * bw + 2, y0, bw - 4, 21, 4); c.fill();
-          c.fillStyle = i === 2 ? '#10202E' : '#FFFFFF'; c.font = '600 12px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+          c.fillStyle = i === 2 ? '#10202E' : '#FFFFFF'; c.font = '600 ' + D.textSize(c, 12, 9.5) + 'px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
           c.fillText(n, x0 + (i + .5) * bw, y0 + 11);
         });
         var m = x0 + 4.5 * bw;
@@ -714,7 +778,7 @@
       { t: 4, still: 8.8, h: 'Add ethanol', p: [['ig', 'Add **ethanol** to each tube. Keep ethanol away from flames.']] },
       { t: 9, still: 13.8, h: 'Shake', p: [['ig', '**Shake** the tubes. Fats and oils dissolve in ethanol.']] },
       { t: 14, still: 20.8, h: 'Pour into water', p: [['ig', 'Pour the liquid from each tube into a clean tube of **water**.']] },
-      { t: 21, still: 26.8, h: 'Observe the result', p: [['ig', 'A **cloudy white emulsion** shows that a **fat or oil** is present. The control stays clear.'], ['bey', 'Fats and oils do not dissolve in water, so they form tiny droplets.']] }
+      { t: 21, still: 26.8, h: 'Observe the result', p: [['ig', 'A **cloudy white emulsion** shows that a **fat or oil** is present. The control stays clear.'], ['ib', 'Fats and oils do not dissolve in water, so they form tiny droplets.']] }
     ],
     make: (global.MolShapes.emulsion = function () {
       var W = 560, H = 420, X = [100, 216, 344, 460], Y = 128, TW = 56, TH = 196, TILT = 1.85;

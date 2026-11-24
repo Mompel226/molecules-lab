@@ -345,6 +345,11 @@ p,li,dd,figcaption{text-wrap:pretty}
 .mf__pill.is-ok,.memv__pill.is-ok{border-color:var(--ok);color:var(--ok)}
 .mf__pill.is-warn,.memv__pill.is-warn{border-color:var(--amber);color:var(--amber)}
 .mf__pill.is-bad,.memv__pill.is-bad{border-color:var(--bad);color:var(--bad)}
+/* a picture showing an extension says its level, in the one extension violet */
+.memv__pill.is-ext{border-style:dashed;border-color:var(--ext-rule);background:var(--ext-tint);color:var(--ext)}
+.memv__btn[hidden]{display:none}
+.offsyl--extra{background:var(--ext-wash);border-color:var(--ext-rule)}
+.offsyl--extra .card__h{color:var(--ext)}
 /* a station's left picture: its buttons, the picture, its read-outs */
 /* the number of the station you are in: a fainter disc, so its white number stays readable on the accent */
 .rstep[aria-current="true"] .rstep__n{background:rgba(255,255,255,.12)}
@@ -399,9 +404,9 @@ p,li,dd,figcaption{text-wrap:pretty}
 
 
 /* ---------- the Molecules Lab ---------- */
-:root{ --dna-a:#2F6DB5; --dna-b:#C8322F; --aa3:#15803D; --gene:#FACC15; --pt-lt-light:#FFFFFF; --pt-lt-dark:#1A1A1A }
+:root{ --dna-a:#4C8FE8; --dna-b:#EF5B5B; --aa3:#34C281; --gene:#FBCB2E; --pt-lt-light:#FFFFFF; --pt-lt-dark:#1A1A1A }
 .ak__bases{display:inline-flex;gap:2px}
-.ak__b{display:inline-block;min-width:15px;height:16px;border-radius:3px;font-style:normal;font-size:11px;font-weight:700;line-height:16px;text-align:center;color:var(--pt-lt-light)}
+.ak__b{display:inline-block;min-width:15px;height:16px;border-radius:3px;font-style:normal;font-size:11px;font-weight:700;line-height:16px;text-align:center;color:var(--pt-lt-dark)}
 .ak__b--A{background:var(--dna-a)} .ak__b--T{background:var(--dna-b)} .ak__b--G{background:var(--aa3)}
 .ak__b--C{background:var(--gene);color:var(--pt-lt-dark)}
 .memv__bar--2{flex:none;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}

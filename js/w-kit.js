@@ -209,6 +209,7 @@
     atO: '<circle fill="#FF7468" stroke="#FFD9D2" stroke-width=".7" cx="14" cy="7" r="4.7"/>',
     atN: '<circle fill="#6FA5FF" stroke="#D7E7FF" stroke-width=".7" cx="14" cy="7" r="4.7"/>',
     linked: '<path stroke="#FFC95C" stroke-width="2.6" stroke-linecap="round" d="M5 7H23"/><circle fill="#FF7468" cx="14" cy="7" r="3"/>',
+    iodineAt: '<circle fill="#4A4E96" stroke="#D6D8F2" stroke-width=".8" cx="14" cy="7" r="4"/>',
     joinpt: '<circle fill="#FFF3D6" stroke="#7A4720" stroke-width="1.1" cx="14" cy="7" r="4.2"/>',
     glycerol: '<rect x="11" y="1" width="6" height="12" rx="2.6" fill="#F2A65A" stroke="#7A4720" stroke-width=".6"/>',
     fatty: '<path fill="none" stroke="#F7E7C4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" d="M2 7l4-3 4 6 4-6 4 6 4-6 4 3"/>',

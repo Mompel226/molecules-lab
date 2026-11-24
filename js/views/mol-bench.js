@@ -102,10 +102,10 @@
             for (var i = 0; i < 3; i++) { var u = seg(B.k, .08 + i * .22, .3 + i * .22); if (u > 0 && u < 1) D.drop(c, X, lerp(72, Y + TH * .5, u * u), col); }
           }
           /* the name of what is in the tube */
-          c.font = '600 12.5px Inter, system-ui, sans-serif';
-          var nm = B.myst ? 'mystery food' : T.BY[f].name, tw = c.measureText(nm).width + 16;
-          c.fillStyle = '#FFFFFF'; D.rr(c, X - tw / 2, 379, tw, 22, 6); c.fill(); c.strokeStyle = '#A9B6C2'; c.lineWidth = 1; c.stroke();
-          c.fillStyle = '#10202E'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(nm, X, 390.5); D.setLight(false);
+          var nfs = D.textSize(c, 12.5), nh = 22 * nfs / 12.5; c.font = '600 ' + nfs + 'px Inter, system-ui, sans-serif';
+          var nm = B.myst ? 'mystery food' : T.BY[f].name, tw = c.measureText(nm).width + 16 * nfs / 12.5;
+          c.fillStyle = '#FFFFFF'; D.rr(c, X - tw / 2, 379, tw, nh, 6); c.fill(); c.strokeStyle = '#A9B6C2'; c.lineWidth = 1; c.stroke();
+          c.fillStyle = '#10202E'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(nm, X, 379 + nh / 2 + .5); D.setLight(false);
         });
       },
       labels: function () { return []; },

@@ -33,7 +33,7 @@
     proc:   ['iodine test', 'Benedict’s test', 'biuret test', 'ethanol emulsion test', 'emulsion test', 'DCPIP test', 'food test', 'food tests', 'digestion', 'respiration', 'energy store', 'insulation', 'protect organs'],
     subst:  ['carbohydrate', 'carbohydrates', 'glucose', 'starch', 'glycogen', 'cellulose', 'sucrose', 'maltose', 'reducing sugar', 'reducing sugars', 'fat', 'fats', 'oil', 'oils',
              'fats and oils', 'fatty acid', 'fatty acids', 'glycerol', 'protein', 'proteins', 'amino acid', 'amino acids', 'DNA', 'bases', 'iodine solution', 'Benedict’s solution',
-             'biuret solution', 'DCPIP', 'ethanol', 'vitamin C', 'emulsion', 'carbon', 'hydrogen', 'oxygen', 'nitrogen', 'lipids', 'waxes'],
+             'biuret solution', 'DCPIP', 'ethanol', 'vitamin C', 'emulsion', 'carbon', 'hydrogen', 'oxygen', 'nitrogen', 'lipids', 'waxes', 'amylose', 'amylopectin'],
     plain:  ['element', 'elements', 'atom', 'atoms', 'molecule', 'molecules', 'polymer', 'monomer']
   };
 

@@ -36,7 +36,7 @@
     sugar: '#FFC95C', sugarLo: '#B9831C', sugarHi: '#FFE9B3',
     glycerol: ['#FFE7BD', '#F2A65A', '#A8622A'], tail: '#F7E7C4', tailLo: '#B79A62',
     /* bases: the Inheritance Lab's four colours on a dark ground */
-    A: '#6FA8EC', T: '#F06A5E', G: '#6EDB9A', Cy: '#FDE047', strand: '#C9D6E4', strandLo: '#6C7E92', bond: '#FFFFFF',
+    A: '#4C8FE8', T: '#EF5B5B', G: '#34C281', Cy: '#FBCB2E', strand: '#C9D6E4', strandLo: '#6C7E92', bond: '#FFFFFF',
     /* glass and the bench */
     glass: 'rgba(214,236,250,.62)', glassHi: 'rgba(255,255,255,.65)', bench0: '#1B3147', bench1: '#12222F', wood: '#4A3A2B',
     /* the food tests: the same colours as the Digestion Lab's bench */
@@ -52,6 +52,11 @@
     var rg = g.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
     rg.addColorStop(0, c3[0]); rg.addColorStop(.48, c3[1]); rg.addColorStop(1, c3[2]);
     g.fillStyle = rg; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+  }
+  /* a word drawn on a picture stays readable on a phone: at least `min` px on the screen, whatever the scale of the picture */
+  function textSize(c, px, min) {
+    var m = c.getTransform ? c.getTransform() : null, k = m && m.a ? Math.abs(m.a) / (global.devicePixelRatio || 1) : 1;
+    return Math.max(px, (min || 11.5) / (k || 1));
   }
   function rr(c, x, y, w, h, r) {
     c.beginPath();
@@ -349,53 +354,87 @@
      how far the second strand has come in), secondOff }. */
   var PAIR = { A: 'T', T: 'A', C: 'G', G: 'C' };
   function baseCol(b) { return b === 'A' ? C.A : b === 'T' ? C.T : b === 'G' ? C.G : C.Cy; }
+  /* B-DNA (Daniel, 24 Nov 2026: "more professional"). The two strands are not opposite each other once coiled, which gives the real wide and narrow
+     grooves. Each pair has the same length, and A and G (two rings) are longer than T and C (one ring). Every part is drawn at its own depth. */
+  var GROOVE = .72, NIGHT_D = '#132A40';
   function helix(c, o) {
     var seq = o.seq, n = seq.length, tw = o.twist == null ? 1 : o.twist, R = o.R, dx = o.dx, x0 = o.x0, y0 = o.y, base = o.turn || 0;
-    var sec = o.second == null ? 1 : o.second, pts = [], items = [], GAP = o.gap == null ? 5 : o.gap;
+    var sec = o.second == null ? 1 : o.second, pts = [], items = [], GAP = o.gap == null ? 4 : o.gap, OPEN = Math.PI - tw * GROOVE, cam = o.cam || 1;
     for (var i = 0; i < n; i++) {
-      var a = base + tw * i * TAU / 10, cs = Math.cos(a), sn = Math.sin(a);
+      var a = base + tw * i * TAU / 10, a2 = a + OPEN;
       var off = (1 - ease(clamp(sec * 1.4 - i * .4 / n))) * (o.secondOff || 0);
-      pts.push({ i: i, x: x0 + i * dx, y1: y0 - R * cs, z1: sn, y2: y0 + R * cs + off, z2: -sn, b: seq[i], p: PAIR[seq[i]], off: off, s: cs >= 0 ? 1 : -1 });
+      pts.push({ i: i, x: x0 + i * dx, y1: y0 - R * Math.cos(a), z1: Math.sin(a), y2: y0 - R * Math.cos(a2) + off, z2: Math.sin(a2), b: seq[i], p: PAIR[seq[i]], off: off });
     }
-    function strandPath(key, keyZ) {
-      /* a strand is a smooth curve: each stretch between two bases is drawn in short pieces, each at its own depth */
-      var sg = key === 'y1' ? -1 : 1, SUB = 6;
+    function strandPath(two) {
+      var SUB = 8;
       function at(j, u) {
-        var f = j + u, a = base + tw * f * TAU / 10, cs = Math.cos(a), sn = Math.sin(a), off = sg > 0 ? lerp(pts[j].off, pts[j + 1].off, u) : 0;
-        return { x: x0 + f * dx, y: y0 + sg * R * cs + off, z: sg < 0 ? sn : -sn };
+        var f = j + u, th = base + tw * f * TAU / 10 + (two ? OPEN : 0);
+        return { x: x0 + f * dx, y: y0 - R * Math.cos(th) + (two ? lerp(pts[j].off, pts[j + 1].off, u) : 0), z: Math.sin(th) };
       }
-      for (var j = 0; j < n - 1; j++) for (var m = 0; m < SUB; m++) {
-        var P0 = at(j, m / SUB), Q0 = at(j, (m + 1) / SUB);
-        items.push({ z: (P0.z + Q0.z) / 2, f: function (P, Q, zz) { return function () {
-          var w = o.w * (.72 + .28 * (zz + 1) / 2);
-          c.lineCap = 'round'; c.strokeStyle = C.strandLo; c.lineWidth = w + 1.6 / (o.cam || 1);
-          c.beginPath(); c.moveTo(P.x, P.y); c.lineTo(Q.x, Q.y); c.stroke();
-          c.strokeStyle = mixHex(C.strandLo, C.strand, .35 + .65 * (zz + 1) / 2); c.lineWidth = w;
-          c.beginPath(); c.moveTo(P.x, P.y); c.lineTo(Q.x, Q.y); c.stroke();
-        }; }(P0, Q0, (P0.z + Q0.z) / 2) });
+      function width(z) { return o.w * (.76 + .24 * (z + 1) / 2); }
+      for (var j = 0; j < n - 1; j++) for (var m = 0; m < SUB; m++) (function (P, Q) {
+        var zz = (P.z + Q.z) / 2, near = (zz + 1) / 2;
+        items.push({ z: zz, f: function () {
+          var ddx = Q.x - P.x, ddy = Q.y - P.y, l = Math.sqrt(ddx * ddx + ddy * ddy) || 1, ex = ddx / l, ey = ddy / l, w = width(zz), u = .4 / cam, up = ex >= 0 ? 1 : -1;
+          /* a rounded tube: a dark edge, its body, and a line of light along its upper side */
+          c.lineCap = 'butt';
+          c.strokeStyle = mixHex('#0C1C2B', '#2E4B66', near); c.lineWidth = w + 1.7 / cam;
+          c.beginPath(); c.moveTo(P.x - ex * u, P.y - ey * u); c.lineTo(Q.x + ex * u, Q.y + ey * u); c.stroke();
+          c.strokeStyle = mixHex('#4C6580', '#BFD6EC', .12 + .88 * near); c.lineWidth = w;
+          c.beginPath(); c.moveTo(P.x - ex * 2 * u, P.y - ey * 2 * u); c.lineTo(Q.x + ex * 2 * u, Q.y + ey * 2 * u); c.stroke();
+          var nx = ey * up * w * .2, ny = -ex * up * w * .2;
+          c.strokeStyle = 'rgba(255,255,255,' + (.1 + .5 * near).toFixed(3) + ')'; c.lineWidth = w * .24;
+          c.beginPath(); c.moveTo(P.x + nx - ex * 2.4 * u, P.y + ny - ey * 2.4 * u); c.lineTo(Q.x + nx + ex * 2.4 * u, Q.y + ny + ey * 2.4 * u); c.stroke();
+        } });
+      })(at(j, m / SUB), at(j, (m + 1) / SUB));
+      /* the two ends of the strand are round */
+      [at(0, 0), at(n - 2, 1)].forEach(function (E) {
+        items.push({ z: E.z, f: function () {
+          var near = (E.z + 1) / 2, w = width(E.z);
+          c.beginPath(); c.arc(E.x, E.y, w / 2 + .85 / cam, 0, TAU); c.fillStyle = mixHex('#0C1C2B', '#2E4B66', near); c.fill();
+          c.beginPath(); c.arc(E.x, E.y, w / 2, 0, TAU); c.fillStyle = mixHex('#4C6580', '#BFD6EC', .12 + .88 * near); c.fill();
+        } });
+      });
+    }
+    strandPath(false);
+    if (sec > 0) strandPath(true);
+    /* one base: a rounded slab, lit from one side */
+    function plate(x, ya, yb, w, col, near, ch, letter) {
+      var t = Math.min(ya, yb), h = Math.abs(yb - ya); if (h < .7) return;
+      var body = mixHex(col, NIGHT_D, (1 - near) * .42 + (o.dimBases ? .55 : 0));
+      rr(c, x - w / 2, t, w, h, Math.min(w * .26, h / 2));
+      var g = c.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+      g.addColorStop(0, mixHex(body, '#FFFFFF', .34)); g.addColorStop(.42, body); g.addColorStop(1, mixHex(body, '#07121C', .34));
+      c.fillStyle = g; c.fill(); c.strokeStyle = 'rgba(6,16,26,.62)'; c.lineWidth = .9 / cam; c.stroke();
+      if (letter) {
+        c.font = '700 ' + Math.min(14, dx * .46) + 'px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillStyle = o.dimBases ? 'rgba(11,20,32,.55)' : '#0B1420'; c.fillText(ch, x, (ya + yb) / 2 + .5);
       }
     }
-    strandPath('y1', 'z1');
-    if (sec > 0) strandPath('y2', 'z2');
-    /* each base has its own depth, half way between its strand and the axis, and ends at the inner edge of its strand: a strand and its own bases
-       never lie over one another, so nothing jumps as the helix turns */
     pts.forEach(function (p) {
-      var w = Math.max(2.4, dx * .68), near = .8 + .2 * Math.abs(Math.cos(base + tw * p.i * TAU / 10)), e1 = y0 - p.s * GAP, s2 = y0 + p.s * GAP + p.off, edge = o.w * .5;
-      var o1 = p.y1 + p.s * edge, o2 = p.y2 - p.s * edge, tall = Math.abs(p.y2 - p.y1) > 30, letters = o.show && o.show.letters && tall;
-      function plate(ya, yb, col, ch, ly) {
-        c.lineCap = 'butt'; c.globalAlpha = o.dimBases ? .35 : 1;
-        c.strokeStyle = mixHex('#0B1420', col, near); c.lineWidth = w; c.beginPath(); c.moveTo(p.x, ya); c.lineTo(p.x, yb); c.stroke();
-        c.globalAlpha = 1;
-        if (letters) { c.font = '700 ' + Math.min(13, dx * .92) + 'px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#0B1420'; c.fillText(ch, p.x, ly); }
-      }
-      if (Math.abs(o1 - e1) > 1 && (o1 - y0) * p.s < 0) items.push({ z: p.z1 * .5 + .001 * p.i, f: function () { plate(o1, e1, baseCol(p.b), p.b, (p.y1 + e1) / 2); } });
-      if (sec > 0 && Math.abs(o2 - s2) > 1 && (o2 - s2) * p.s > 0) items.push({ z: p.z2 * .5 + .001 * p.i, f: function () { plate(s2, o2, baseCol(p.p), p.p, (s2 + p.y2) / 2); } });
+      var w = Math.max(2.4, dx * .66), y2n = p.y2 - p.off, way = y2n >= p.y1 ? 1 : -1, f = p.b === 'A' || p.b === 'G' ? .56 : .44;
+      var jy = p.y1 + (y2n - p.y1) * f, jz = p.z1 + (p.z2 - p.z1) * f, edge = Math.min(o.w * .68, Math.abs(y2n - p.y1) * .22), wide = Math.abs(y2n - p.y1) > GAP * 3.2;
+      var out1 = p.y1 + way * edge, in1 = wide ? jy - way * GAP : jy, in2 = (wide ? jy + way * GAP : jy) + p.off, out2 = p.y2 - way * edge;
+      var letters = o.show && o.show.letters && Math.abs(y2n - p.y1) > 30;
+      if ((in1 - out1) * way > .7) items.push({ z: (p.z1 + jz) / 2 + .001 * p.i, f: function () { plate(p.x, out1, in1, w, baseCol(p.b), ((p.z1 + jz) / 2 + 1) / 2, p.b, letters); } });
+      if (sec > 0 && (out2 - in2) * way > .7) items.push({ z: (p.z2 + jz) / 2 + .001 * p.i, f: function () { plate(p.x, in2, out2, w, baseCol(p.p), ((p.z2 + jz) / 2 + 1) / 2, p.p, letters); } });
+      /* where a base is joined to its strand, a small round joint of the strand itself */
+      [[p.y1, p.z1, true], [p.y2, p.z2, sec > 0]].forEach(function (J) {
+        if (!J[2]) return;
+        items.push({ z: J[1] + .003, f: function () {
+          var near = (J[1] + 1) / 2, rj = o.w * (.56 + .1 * near);
+          c.beginPath(); c.arc(p.x, J[0], rj + .85 / cam, 0, TAU); c.fillStyle = mixHex('#0C1C2B', '#2E4B66', near); c.fill();
+          var g = c.createRadialGradient(p.x - rj * .35, J[0] - rj * .4, rj * .1, p.x, J[0], rj);
+          g.addColorStop(0, mixHex('#7D95AE', '#F2F8FE', near)); g.addColorStop(1, mixHex('#3F566E', '#9FBCD8', near));
+          c.beginPath(); c.arc(p.x, J[0], rj, 0, TAU); c.fillStyle = g; c.fill();
+        } });
+      });
       /* the bonds between a pair: two between A and T, three between C and G */
-      if (o.show && o.show.bonds && sec >= 1 && p.off < .5 && Math.abs(p.y2 - p.y1) > GAP * 3) items.push({ z: .001 * p.i, f: function () {
+      if (o.show && o.show.bonds && sec >= 1 && p.off < .5 && wide) items.push({ z: jz + .002, f: function () {
         var nb = p.b === 'A' || p.b === 'T' ? 2 : 3;
-        c.strokeStyle = 'rgba(255,255,255,' + (o.bondAlpha == null ? .95 : o.bondAlpha) + ')'; c.lineWidth = 1.4 / (o.cam || 1); c.setLineDash([2 / (o.cam || 1), 1.6 / (o.cam || 1)]);
+        c.strokeStyle = 'rgba(232,246,255,' + (o.bondAlpha == null ? .95 : o.bondAlpha) + ')'; c.lineWidth = 1.5 / cam; c.lineCap = 'butt'; c.setLineDash([1.9 / cam, 1.3 / cam]);
         c.beginPath();
-        for (var q = 0; q < nb; q++) { var bx = p.x + (nb === 2 ? (q ? .2 : -.2) : (q - 1) * .3) * w; c.moveTo(bx, y0 - GAP); c.lineTo(bx, y0 + GAP); }
+        for (var q = 0; q < nb; q++) { var bx = p.x + (nb === 2 ? (q ? .22 : -.22) : (q - 1) * .34) * w; c.moveTo(bx, jy - way * GAP); c.lineTo(bx, jy + way * GAP); }
         c.stroke(); c.setLineDash([]);
       } });
     });
@@ -518,7 +557,7 @@
     ball: ball, rr: rr, ground: ground, frame: frame, arrow: arrow,
     MODELS: MODELS, formula: formula, model: model, turn: turn,
     glc: glc, ringAt: ringAt, joinPoints: joinPoints, joinLink: joinLink, tailPts: tailPts, tail: tail, glycerolBar: glycerolBar, bead: bead,
-    helix: helix, dnaGeom: dnaGeom, PAIR: PAIR, baseCol: baseCol, tile: tile, setLight: setLight,
+    textSize: textSize, helix: helix, dnaGeom: dnaGeom, PAIR: PAIR, baseCol: baseCol, tile: tile, setLight: setLight,
     tube: tube, rack: rack, dropper: dropper, drop: drop, bath: bath
   };
 })(window);

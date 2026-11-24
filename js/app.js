@@ -443,11 +443,11 @@
        you need to know sections but a separate one"). A sentence from an older 0610 syllabus (tagged in
        past-syllabus.json) or beyond the syllabus (`ext`) is drawn the same way, with its pictures and widgets,
        but in the card below: "Not in the syllabus for 2026–2029". Each li keeps its place in the master as data-i. */
-    var off = { old: document.createElement('ul'), beyond: document.createElement('ul') }, offAt = { old: [], beyond: [] };
-    off.old.className = off.beyond.className = 'exam-list exam-list--off';
+    var off = { old: document.createElement('ul'), beyond: document.createElement('ul'), extra: document.createElement('ul') }, offAt = { old: [], beyond: [], extra: [] };
+    off.old.className = off.beyond.className = off.extra.className = 'exam-list exam-list--off';
     function offOf(b, i) {
       if (st.past && st.past.exam && st.past.exam[i] != null) return 'old';
-      return typeof b === 'object' && b.ext ? 'beyond' : null;
+      return typeof b === 'object' && b.ext ? (b.extra ? 'extra' : 'beyond') : null;
     }
     var partName = null;
 
@@ -603,7 +603,7 @@
       card.appendChild(el);
     });
     /* the card below reads in the station's order: a part moved out of sentence 3 comes after sentence 3 (`near`) */
-    ['old', 'beyond'].forEach(function (k) {
+    ['old', 'beyond', 'extra'].forEach(function (k) {
       offAt[k].sort(function (x, y) { return x.k - y.k; }).forEach(function (x) { off[k].appendChild(x.li); });
     });
 
@@ -652,6 +652,15 @@
         if (goldExt) oc.appendChild(goldExt);
       }
       pane.appendChild(oc);
+    }
+    /* an extension for pupils who want more (Daniel, 24 Nov 2026: "very, very clear that the students only need to know that starch is made of glucose"):
+       its own card, which never says that it earns marks */
+    if (off.extra.children.length) {
+      var xc = document.createElement('div');
+      xc.className = 'card offsyl offsyl--extra';
+      xc.innerHTML = '<div class="card__h">Extension \u2014 only if you want to go further</div>' + (st.learn.extraLead ? '<p class="offsyl__lead">' + M(st.learn.extraLead) + '</p>' : '');
+      xc.appendChild(off.extra);
+      pane.appendChild(xc);
     }
 
     var further = (st.learn && st.learn.further) || [];
