@@ -341,10 +341,11 @@
     c.globalAlpha = 1;
   }
   /* one amino acid: a bead in the colour of its kind */
-  function bead(c, x, y, r, kind, alpha) {
+  function bead(c, x, y, r, kind, alpha, fog) {
     if (alpha != null) c.globalAlpha = alpha;
-    var col = AA[kind % AA.length];
-    ball(c, x, y, r, [mixHex(col, '#FFFFFF', .62), col, mixHex(col, '#0B1420', .5)]);
+    var col = typeof kind === 'string' ? kind : AA[kind % AA.length], q = [mixHex(col, '#FFFFFF', .62), col, mixHex(col, '#0B1420', .5)];
+    if (fog) q = q.map(function (h) { return mixHex(h, '#132A40', fog); });
+    ball(c, x, y, r, q);
     if (alpha != null) c.globalAlpha = 1;
   }
 

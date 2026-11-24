@@ -30,7 +30,7 @@
   }
   /* a long name in a band breaks at its meaning ("partially permeable" over "membrane"), never in the middle of either part.
      Only the drawing is tied: the scene's words stay plain, so the reading time still counts every word */
-  var FIRST_LINES = ['food sample', 'water with', 'hot water', 'fatty acid', 'amino acid'];
+  var FIRST_LINES = ['food sample', 'water with', 'hot water', 'fatty acid', 'amino acid', 'amylase as a'];
   function tied(text) {
     var t = String(text), keep = function (x) { return x.replace(/ /g, '\u00A0'); };
     for (var i = 0; i < FIRST_LINES.length; i++) {

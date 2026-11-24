@@ -215,68 +215,203 @@
     var w = (k - .42) / .58; return drawPoly(c, F, b, ease(w), 1 - ease(w), amb);
   }
 
-  /* ======================================================================= a protein chain
-     Its beads lie one step apart at every moment: folding changes only the angle at each bead, so the chain never gets
-     longer or shorter (Inheritance Lab, 6 Nov 2026: "a molecule that coils keeps its drawn length"). */
-  function foldOf(seed, n, wx, wy) {
-    /* a compact walk on a triangular lattice that never crosses itself: a real chain does not pass through itself */
-    var DIR = []; for (var d = 0; d < 6; d++) DIR.push([Math.cos(d * Math.PI / 3), Math.sin(d * Math.PI / 3)]);
-    for (var tries = 0; tries < 400; tries++) {
-      var R = D.rng(seed + tries * 101), pts = [[0, 0]], dirs = [0], used = { '0,0': 1 }, ok = true;
+  /* ======================================================================= a protein chain, in 3D
+     Daniel, 24 Nov 2026: "it's very important to understand that the protein [folds] into a 3D structure". The chain's beads lie
+     one step apart at every moment: folding turns each link from its place in the loose chain to its place in the folded chain,
+     so the chain never gets longer or shorter. It winds up from its far end, so the part not yet folded lies still (Inheritance
+     Lab, 6 Nov 2026). The folded chain is a compact walk on a cubic grid that never passes through itself, set at an angle so
+     that its depth can be seen from the front; the picture keeps still while it folds. */
+  var DIR6 = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  function fold3Of(seed, n, w, set, cn) {
+    for (var tries = 0; tries < 800; tries++) {
+      var R = D.rng(seed + tries * 101), pts = [[0, 0, 0]], used = { '0,0,0': 1 }, dirs = [], ok = true;
       for (var i = 1; i < n; i++) {
-        var p = pts[i - 1], best = -1, bestS = 1e9, cx = 0, cy = 0;
-        pts.forEach(function (q) { cx += q[0]; cy += q[1]; }); cx /= pts.length; cy /= pts.length;
-        for (var dd = 0; dd < 6; dd++) {
-          var back = (dirs[i - 1] + 3) % 6; if (dd === back) continue;
-          /* a turn of at most 120 degrees at each bead */
-          var turn = (dd - dirs[i - 1] + 6) % 6; if (turn === 3) continue;
-          var x = p[0] + DIR[dd][0], y = p[1] + DIR[dd][1], key = Math.round(x * 2) + ',' + Math.round(y * 1.732);
-          if (used[key]) continue;
+        var p = pts[i - 1], cx = 0, cy = 0, cz = 0, best = -1, bs = 1e9;
+        pts.forEach(function (q) { cx += q[0]; cy += q[1]; cz += q[2]; }); cx /= pts.length; cy /= pts.length; cz /= pts.length;
+        for (var d = 0; d < 6; d++) {
+          if (dirs.length && d === (dirs[dirs.length - 1] ^ 1)) continue;
+          var x = p[0] + DIR6[d][0], y = p[1] + DIR6[d][1], z = p[2] + DIR6[d][2];
+          if (used[x + ',' + y + ',' + z]) continue;
           var near = 0;
-          for (var nd = 0; nd < 6; nd++) { var nx0 = x + DIR[nd][0], ny0 = y + DIR[nd][1]; if (used[Math.round(nx0 * 2) + ',' + Math.round(ny0 * 1.732)]) near++; }
-          /* close to the middle, but with room between the turns of the chain, so the chain can still be followed by eye */
-          var s = wx * (x - cx) * (x - cx) + wy * (y - cy) * (y - cy) + R() * 5 + near * 2.4;
-          if (s < bestS) { bestS = s; best = dd; }
+          for (var e = 0; e < 6; e++) if (used[(x + DIR6[e][0]) + ',' + (y + DIR6[e][1]) + ',' + (z + DIR6[e][2])]) near++;
+          var sc = w[0] * (x - cx) * (x - cx) + w[1] * (y - cy) * (y - cy) + w[2] * (z - cz) * (z - cz) + R() * 4 + near * cn + (dirs.length && d === dirs[dirs.length - 1] ? -1.2 : 0);
+          if (sc < bs) { bs = sc; best = d; }
         }
         if (best < 0) { ok = false; break; }
-        var nx = p[0] + DIR[best][0], ny = p[1] + DIR[best][1];
-        used[Math.round(nx * 2) + ',' + Math.round(ny * 1.732)] = 1; pts.push([nx, ny]); dirs.push(best);
+        var np = [p[0] + DIR6[best][0], p[1] + DIR6[best][1], p[2] + DIR6[best][2]];
+        used[np.join(',')] = 1; pts.push(np); dirs.push(best);
       }
-      if (!ok) continue;
-      var turns = [];
-      for (var t2 = 2; t2 < n; t2++) { var dt = (dirs[t2] - dirs[t2 - 1] + 6) % 6; turns.push((dt > 3 ? dt - 6 : dt) * Math.PI / 3); }
-      var mx = 0, my = 0; pts.forEach(function (q) { mx += q[0]; my += q[1]; });
-      return { turns: turns, first: dirs[1] * Math.PI / 3, cx: mx / n, cy: my / n };   /* dirs[0] is only where the walk started looking */
+      if (ok) return dirs.map(function (d) { return D.turn(DIR6[d], set[0], set[1], set[2]); });
     }
-    throw new Error('no fold found');
+    throw new Error('no 3D fold found');
   }
-  /* the beads for a fold reached by the fraction k, the chain's middle at (cx, cy) */
-  function chainAt(F, n, cx, cy, step, k) {
-    /* it winds up from its far end, so the part not yet folded lies still (Inheritance Lab, 6 Nov 2026). Before it folds, the
-       chain lies in a gentle wave: every bead stays one step from the next, so the chain has the same length in every shape */
-    var e0 = ease(seg(k, .78, 1)), a = F.first * e0, pts = [[0, 0]], x = 0, y = 0, J = F.turns.length;
+  function slerp(a, b, t) {
+    var dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2], o, k0, k1;
+    if (dot > .9995) { var q = [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)], l = Math.hypot(q[0], q[1], q[2]) || 1; return [q[0] / l, q[1] / l, q[2] / l]; }
+    if (dot < -.9995) {
+      var ax = Math.abs(a[2]) < .9 ? [-a[1], a[0], 0] : [0, -a[2], a[1]], al = Math.hypot(ax[0], ax[1], ax[2]) || 1, an = Math.PI * t;
+      return [a[0] * Math.cos(an) + ax[0] / al * Math.sin(an), a[1] * Math.cos(an) + ax[1] / al * Math.sin(an), a[2] * Math.cos(an) + ax[2] / al * Math.sin(an)];
+    }
+    o = Math.acos(dot); k0 = Math.sin((1 - t) * o) / Math.sin(o); k1 = Math.sin(t * o) / Math.sin(o);
+    return [a[0] * k0 + b[0] * k1, a[1] * k0 + b[1] * k1, a[2] * k0 + b[2] * k1];
+  }
+  /* the loose chain: a gentle wave in the plane of the picture */
+  function waveDir(i) { var a = 1.25 * Math.sin(i * TAU / 17); return [Math.cos(a), Math.sin(a), 0]; }
+  /* the beads (units of one step, centred) of the fold F reached by the fraction k */
+  function chain3At(F, n, k) {
+    var pts = [[0, 0, 0]], x = 0, y = 0, z = 0;
     for (var i = 1; i < n; i++) {
-      var e = e0;
-      if (i > 1) { var from = (J - (i - 2) - 1) / J * .78; e = ease(seg(k, from, from + .22)); a += F.turns[i - 2] * e; }
-      var ang = a + .75 * Math.sin(i * TAU / 17) * (1 - e);
-      x += step * Math.cos(ang); y += step * Math.sin(ang); pts.push([x, y]);
+      var from = (n - 1 - i) / (n - 1) * .78, d = slerp(waveDir(i), F[i - 1], ease(seg(k, from, from + .22)));
+      x += d[0]; y += d[1]; z += d[2]; pts.push([x, y, z]);
     }
-    var mx = 0, my = 0; pts.forEach(function (p) { mx += p[0]; my += p[1]; }); mx /= n; my /= n;
-    return pts.map(function (p) { return [p[0] - mx + cx, p[1] - my + cy]; });
+    var m = [0, 0, 0]; pts.forEach(function (p) { m[0] += p[0]; m[1] += p[1]; m[2] += p[2]; });
+    return pts.map(function (p) { return [p[0] - m[0] / n, p[1] - m[1] / n, p[2] - m[2] / n]; });
   }
-  /* `upTo`: how many beads of the chain have joined so far (all, if left out) */
-  function drawChain(c, pts, kinds, r, alpha, upTo) {
-    var m = upTo == null ? pts.length : Math.floor(upTo);
-    c.globalAlpha = alpha == null ? 1 : alpha;
-    c.lineJoin = 'round'; c.lineCap = 'round'; c.strokeStyle = '#8496AA'; c.lineWidth = r * .55;
-    c.beginPath(); pts.slice(0, m).forEach(function (p, i) { c[i ? 'lineTo' : 'moveTo'](p[0], p[1]); }); c.stroke();
-    c.globalAlpha = 1;
-    pts.slice(0, m).forEach(function (p, i) { D.bead(c, p[0], p[1], r, kinds[i], alpha); });
+  /* 3D points to the screen: turned by the reader (yaw, pitch), y upwards, so a molecule is never drawn as its mirror image */
+  function project(P, view, cx, cy, s) {
+    return P.map(function (p) { var q = D.turn(p, view.yaw || 0, view.pitch || 0, 0); return { x: cx + q[0] * s, y: cy - q[1] * s, z: q[2] }; });
+  }
+  /* a chain of beads in depth order; `upTo` how many have joined (all, if left out); `s` px to one step. Each link runs from the
+     surface of one bead to the surface of the next, in short pieces at their own depth, so a link never jumps over its own bead
+     as the chain turns. Farther beads are a little darker. */
+  function drawChain3(c, Q, kinds, r, upTo, alpha, s) {
+    var m = upTo == null ? Q.length : Math.floor(upTo), items = [], zl = 1e9, zh = -1e9, u = s || 22, rz = r / u;
+    Q.forEach(function (q) { zl = Math.min(zl, q.z); zh = Math.max(zh, q.z); });
+    var span = zh - zl, fog = function (z) { return span > .3 ? .34 * (zh - z) / span : 0; };
+    Q.forEach(function (q, i) {
+      items.push({ z: q.z, f: function () { D.bead(c, q.x, q.y, r, kinds[i], alpha, fog(q.z)); } });
+      if (!i || i >= m) return;
+      var A = Q[i - 1], dx = (q.x - A.x) / u, dy = (q.y - A.y) / u, dz = q.z - A.z, L = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (L < rz * 2) return;
+      for (var h = 0; h < 4; h++) (function (t0, t1) {
+        var P0 = { x: lerp(A.x, q.x, t0), y: lerp(A.y, q.y, t0), z: lerp(A.z, q.z, t0) }, P1 = { x: lerp(A.x, q.x, t1), y: lerp(A.y, q.y, t1), z: lerp(A.z, q.z, t1) };
+        items.push({ z: (P0.z + P1.z) / 2, f: function () {
+          var ex = P1.x - P0.x, ey = P1.y - P0.y, l = Math.sqrt(ex * ex + ey * ey) || 1; ex /= l; ey /= l;
+          c.globalAlpha = alpha == null ? 1 : alpha; c.lineCap = 'butt'; c.strokeStyle = D.mixHex('#8496AA', '#132A40', fog((P0.z + P1.z) / 2)); c.lineWidth = r * .55;
+          c.beginPath(); c.moveTo(P0.x - ex * .5, P0.y - ey * .5); c.lineTo(P1.x + ex * .5, P1.y + ey * .5); c.stroke(); c.globalAlpha = 1;
+        } });
+      })(rz * .9 / L + (1 - 2 * rz * .9 / L) * h / 4, rz * .9 / L + (1 - 2 * rz * .9 / L) * (h + 1) / 4);
+    });
+    items.sort(function (a, b) { return a.z - b.z; });
+    items.forEach(function (it) { it.f(); });
   }
   var KINDS1 = [], KINDS2 = [];
-  (function () { var R = D.rng(23), S = D.rng(77); for (var i = 0; i < 34; i++) { KINDS1.push(Math.floor(R() * 20)); KINDS2.push(Math.floor(S() * 20)); } })();
-  var FOLD1 = foldOf(5, 34, .55, 1.5), FOLD2 = foldOf(19, 34, 1.5, .5);
-  global.MolShapes = { POLY: POLY, drawPoly: drawPoly, polyVia: polyVia, AMY: AMY, amyAt: amyAt, iodineAtoms: iodineAtoms, drawAmylose: drawAmylose, boxOf: boxOf, drawBox: drawBox, polyBox: polyBox, foldOf: foldOf, chainAt: chainAt, drawChain: drawChain, KINDS1: KINDS1, KINDS2: KINDS2, FOLD1: FOLD1, FOLD2: FOLD2 };
+  (function () { var R = D.rng(23), S2 = D.rng(77); for (var i = 0; i < 30; i++) { KINDS1.push(Math.floor(R() * 20)); KINDS2.push(Math.floor(S2() * 20)); } })();
+  var FOLD1 = fold3Of(27, 30, [.06, .1, .08], [.62, -.46, .2], .3), FOLD2 = fold3Of(10, 30, [.06, .1, .08], [-.5, -.42, -.15], .3);   /* open enough that the chain can be followed by eye */
+
+  /* ======================================================================= a real protein: amylase, measured
+     The Y7 cell game's molecule (js/data/amylase.js: PDB 1SMD, 496 amino acids). Its beads swell, take amylase's own colour and
+     merge into its smooth surface: nothing is added, the surface is the outside of the same amino acids (Y7 review, 12 Nov 2026:
+     the surface never comes over the chain like a coat). */
+  var AMYL = null;
+  function amylase() {
+    if (AMYL || !global.AMYLASE) return AMYL;
+    var A = global.AMYLASE, dec = global.atob;
+    function unq(o) { var b = dec(o.d), n = b.length / 2, f = []; for (var i = 0; i < n; i++) { var k = i % 3; f.push(o.lo[k] + (o.hi[k] - o.lo[k]) * (b.charCodeAt(2 * i) | (b.charCodeAt(2 * i + 1) << 8)) / 65535); } return f; }
+    function triples(f) { var out = []; for (var i = 0; i < f.length; i += 3) out.push([f[i], f[i + 1], f[i + 2]]); return out; }
+    var ca = triples(unq(A.ca)), v = triples(unq(A.surf.v)), ib = dec(A.surf.i), tri = [], shut = dec(A.surf.shut), m = [0, 0, 0];
+    for (var i = 0; i < ib.length / 2; i += 3) tri.push([0, 1, 2].map(function (q) { return ib.charCodeAt(2 * (i + q)) | (ib.charCodeAt(2 * (i + q) + 1) << 8); }));
+    ca.forEach(function (p) { m[0] += p[0]; m[1] += p[1]; m[2] += p[2]; }); m = m.map(function (q) { return q / ca.length; });
+    ca = ca.map(function (p) { return [p[0] - m[0], p[1] - m[1], p[2] - m[2]]; }); v = v.map(function (p) { return [p[0] - m[0], p[1] - m[1], p[2] - m[2]]; });
+    /* each triangle's outward direction: its corners go round anticlockwise, seen from outside */
+    var fn = tri.map(function (t) {
+      var a = v[t[0]], b = v[t[1]], d = v[t[2]], u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [d[0] - a[0], d[1] - a[1], d[2] - a[2]];
+      var n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], l = Math.hypot(n[0], n[1], n[2]) || 1;
+      return [n[0] / l, n[1] / l, n[2] / l];
+    });
+    var out = 0; tri.forEach(function (t, j) { var c0 = v[t[0]]; out += fn[j][0] * c0[0] + fn[j][1] * c0[1] + fn[j][2] * c0[2]; });
+    if (out < 0) fn = fn.map(function (n) { return [-n[0], -n[1], -n[2]]; });
+    /* each point's direction, the mean of its triangles': the light changes smoothly over the surface */
+    var vn = v.map(function () { return [0, 0, 0]; });
+    tri.forEach(function (t, j) { t.forEach(function (q) { vn[q][0] += fn[j][0]; vn[q][1] += fn[j][1]; vn[q][2] += fn[j][2]; }); });
+    vn = vn.map(function (n) { var l = Math.hypot(n[0], n[1], n[2]) || 1; return [n[0] / l, n[1] / l, n[2] / l]; });
+    /* each bead in the colour of its own kind of amino acid, as in the chains above */
+    var ORDER = 'ACDEFGHIKLMNPQRSTVWY', kind = (A.seq || '').split('').map(function (q) { return Math.max(0, ORDER.indexOf(q)); });
+    return (AMYL = { n: A.n, ca: ca, v: v, tri: tri, fn: fn, vn: vn, shut: shut, ss: A.ss, seq: A.seq, kind: kind });
+  }
+  var LAYER = null;
+  function onLayer(c, alpha, paint) {
+    if (alpha >= 1 || !c.canvas || !c.canvas.ownerDocument) { paint(c); return; }
+    if (!LAYER) LAYER = c.canvas.ownerDocument.createElement('canvas');
+    if (LAYER.width !== c.canvas.width || LAYER.height !== c.canvas.height) { LAYER.width = c.canvas.width; LAYER.height = c.canvas.height; }
+    var g = LAYER.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, LAYER.width, LAYER.height); g.setTransform(c.getTransform());
+    paint(g);
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = alpha; c.drawImage(LAYER, 0, 0); c.restore();
+  }
+  var AMY_COL = [226, 162, 66], LIGHT = (function () { var l = [-.42, .5, .76], n = Math.hypot(l[0], l[1], l[2]); return [l[0] / n, l[1] / n, l[2] / n]; })();
+  function surfaceColours(A, view) {
+    return A.vn.map(function (n, i) {
+      var q = D.turn(n, view.yaw || 0, view.pitch || 0, 0), lam = Math.max(0, q[0] * LIGHT[0] + q[1] * LIGHT[1] + q[2] * LIGHT[2]);
+      var hz = Math.max(0, q[2]) * .5 + lam * .5, o = Math.pow(Math.min(1, A.shut.charCodeAt(i) / 255 / .15), .7), k = .4 + .66 * lam, sp = Math.pow(hz, 24) * 70;
+      return [AMY_COL[0] * (1 - .62 * o) * k + sp, AMY_COL[1] * (1 - .8 * o) * k + sp, AMY_COL[2] * (1 - .92 * o) * k + sp].map(function (x) { return Math.min(255, x); });
+    });
+  }
+  var RASTER = null;
+  function paintSurface(g, A, cx, cy, s, view) {
+    var P = project(A.v, view, cx, cy, s), col = surfaceColours(A, view), fn = A.fn.map(function (n) { return D.turn(n, view.yaw || 0, view.pitch || 0, 0)[2]; });
+    if (g.canvas && g.canvas.ownerDocument && g.getTransform) {
+      /* the smooth shape: each pixel takes the colour shared smoothly from the corners of its triangle, and the nearest surface wins */
+      var m = g.getTransform(), ss = Math.hypot(m.a, m.b) < 1.5 ? 2 : 1, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      var Q = P.map(function (p) { var x = (m.a * p.x + m.c * p.y + m.e) * ss, y = (m.b * p.x + m.d * p.y + m.f) * ss; x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); return [x, y, p.z]; });
+      x0 = Math.floor(x0) - 1; y0 = Math.floor(y0) - 1;
+      var w = Math.ceil(x1) - x0 + 2, h = Math.ceil(y1) - y0 + 2;
+      if (!RASTER) RASTER = g.canvas.ownerDocument.createElement('canvas');
+      if (RASTER.width !== w || RASTER.height !== h) { RASTER.width = w; RASTER.height = h; }
+      var rc = RASTER.getContext('2d'), img = rc.createImageData(w, h), px = img.data, zb = new Float32Array(w * h).fill(-1e9);
+      A.tri.forEach(function (t, j) {
+        if (fn[j] <= 0) return;
+        var a = Q[t[0]], b = Q[t[1]], c = Q[t[2]], ca = col[t[0]], cb = col[t[1]], cc = col[t[2]];
+        var bx0 = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0]) - x0)), bx1 = Math.min(w - 1, Math.ceil(Math.max(a[0], b[0], c[0]) - x0));
+        var by0 = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1]) - y0)), by1 = Math.min(h - 1, Math.ceil(Math.max(a[1], b[1], c[1]) - y0));
+        var den = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]); if (!den) return;
+        for (var y = by0; y <= by1; y++) for (var x = bx0; x <= bx1; x++) {
+          var X = x + x0 + .5, Y = y + y0 + .5, l0 = ((b[1] - c[1]) * (X - c[0]) + (c[0] - b[0]) * (Y - c[1])) / den, l1 = ((c[1] - a[1]) * (X - c[0]) + (a[0] - c[0]) * (Y - c[1])) / den, l2 = 1 - l0 - l1;
+          if (l0 < -.001 || l1 < -.001 || l2 < -.001) continue;
+          var z = l0 * a[2] + l1 * b[2] + l2 * c[2], k = y * w + x;
+          if (z <= zb[k]) continue;
+          zb[k] = z; k *= 4;
+          px[k] = l0 * ca[0] + l1 * cb[0] + l2 * cc[0]; px[k + 1] = l0 * ca[1] + l1 * cb[1] + l2 * cc[1]; px[k + 2] = l0 * ca[2] + l1 * cb[2] + l2 * cc[2]; px[k + 3] = 255;
+        }
+      });
+      rc.putImageData(img, 0, 0);
+      g.save(); g.setTransform(1 / ss, 0, 0, 1 / ss, 0, 0); g.imageSmoothingEnabled = true; g.drawImage(RASTER, x0, y0); g.restore();
+      return;
+    }
+    /* where there is no screen (the checks): flat triangles, nearest last */
+    A.tri.map(function (t, j) { return { t: t, j: j, z: (P[t[0]].z + P[t[1]].z + P[t[2]].z) / 3 }; }).filter(function (q) { return fn[q.j] > 0; })
+      .sort(function (a, b) { return a.z - b.z; }).forEach(function (q) {
+        var cl = col[q.t[0]], a = P[q.t[0]], b = P[q.t[1]], d = P[q.t[2]];
+        g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(d.x, d.y); g.closePath(); g.fillStyle = 'rgb(' + cl.map(Math.round).join(',') + ')'; g.fill();
+      });
+  }
+  /* k: 0 its amino acids, 1 its smooth shape. trace (0…1): a light that runs along the chain, from its first amino acid to its last,
+     so the one long chain can be followed (null: none) */
+  function drawAmylase(c, cx, cy, s, view, k, trace) {
+    var A = amylase(); if (!A) return null;
+    var bk = ease(clamp(k / .7)), sk = clamp((k - .45) / .45), Q = project(A.ca, view, cx, cy, s);
+    if (sk < 1) {
+      var items = [], r = lerp(.3, .5, bk) * s, zl = 1e9, zh = -1e9, at = trace == null ? -99 : trace * (A.n + 30) - 15, linkA = 1 - clamp(bk * 2.2);
+      Q.forEach(function (q) { zl = Math.min(zl, q.z); zh = Math.max(zh, q.z); });
+      Q.forEach(function (q, i) {
+        var fog = .36 * (zh - q.z) / Math.max(.1, zh - zl), lit = Math.max(0, 1 - Math.abs(i - at) / 14);
+        var col = D.mixHex(D.mixHex(D.AA[A.kind[i] % D.AA.length], '#E2A242', bk), '#FFFFFF', lit * .6);
+        items.push({ z: q.z, f: function () { D.bead(c, q.x, q.y, r * (1 + lit * .25), col, null, fog * (1 - lit)); } });
+        if (i && linkA > 0) items.push({ z: (q.z + Q[i - 1].z) / 2, f: function () {
+          c.globalAlpha = linkA; c.strokeStyle = D.mixHex('#8496AA', '#132A40', fog); c.lineWidth = r * .5; c.lineCap = 'round';
+          c.beginPath(); c.moveTo(Q[i - 1].x, Q[i - 1].y); c.lineTo(q.x, q.y); c.stroke(); c.globalAlpha = 1;
+        } });
+      });
+      items.sort(function (a, b) { return a.z - b.z; });
+      items.forEach(function (it) { it.f(); });
+    }
+    if (sk > 0) onLayer(c, sk, function (g) { paintSurface(g, A, cx, cy, s, view); });
+    return Q;
+  }
+  /* the box round the whole molecule: its smooth shape is the largest it is ever drawn */
+  function amylaseBox(cx, cy, s, view) { var A = amylase(); return boxOf(project(A.v, view, cx, cy, s).map(function (q) { return [q.x, q.y]; }), 8); }
+
+  global.MolShapes = { POLY: POLY, drawPoly: drawPoly, polyVia: polyVia, AMY: AMY, amyAt: amyAt, iodineAtoms: iodineAtoms, drawAmylose: drawAmylose, boxOf: boxOf, drawBox: drawBox, polyBox: polyBox,
+                       chain3At: chain3At, project: project, drawChain3: drawChain3, KINDS1: KINDS1, KINDS2: KINDS2, FOLD1: FOLD1, FOLD2: FOLD2, amylase: amylase, drawRealProtein: drawAmylase, realBox: amylaseBox };
 
   /* ==================================================================================== 1. from a chain to its atoms */
   L.add('atomsfilm', Film({
@@ -427,61 +562,70 @@
   /* ==================================================================================== 4. a protein from amino acids */
   L.add('protfilm', Film({
     title: 'From amino acids to a protein',
-    aria: 'Separate amino acids of different kinds join, one after another, in a chain. The chain folds into a shape. A chain with a different sequence of amino acids has a different shape.',
-    key: [['amino', 'an amino acid (each colour is one kind)']],
-    M: [0, 4.5, 11, 17.5, 25],
+    aria: 'Separate amino acids of different kinds join, one after another, in a chain. The chain folds into a 3D shape. A chain with a different sequence of amino acids has a different shape. A real protein, amylase, is shown as its folded chain of amino acids, which then merge into one smooth shape: the same folded chain.',
+    key: [['amino', 'an amino acid (each colour is one kind)'], ['protSurf', 'the folded chain, drawn as a smooth shape', [4]]],
+    M: [0, 4.5, 11, 17.5, 25, 35.5],
     steps: [
       { t: 0, still: 4.2, h: 'Amino acids', p: [['ig', 'Proteins are made from small molecules called **amino acids**. Here, each colour is one kind of amino acid.'], ['ib', 'There are 20 different kinds of amino acid in proteins.']] },   /* IB B1.2.4 */
       { t: 4.5, still: 10.8, h: 'A chain', p: [['ig', 'Amino acids join, one after another, in a **chain**.']] },
-      { t: 11, still: 17.2, h: 'The chain folds', p: [['ig', 'The chain **folds** into its own **shape**. The chain does not become longer or shorter: only its shape changes.']] },
-      { t: 17.5, still: 24.6, h: 'A different sequence', p: [['ig', 'A different **sequence** (order) of amino acids makes a **different protein**, with a different shape.']] }
+      { t: 11, still: 17.2, h: 'The chain folds', p: [['ig', 'The chain **folds** into its own **3D shape**. The chain does not become longer or shorter: only its shape changes.']] },
+      { t: 17.5, still: 24.6, h: 'A different sequence', p: [['ig', 'A different **sequence** (order) of amino acids makes a **different protein**, with a different shape.']] },
+      { t: 25, still: 35, h: 'A real protein', p: [['ig', 'A real protein is a much longer chain. **Amylase**, the enzyme in saliva, has 496 amino acids.'], ['ig', 'Pictures often show a protein as one **smooth shape**. This smooth shape is the folded chain itself: every amino acid is still inside it.']] }
     ],
     make: function () {
-      var W = 560, H = 400, n = 34, step = 18, r = 8.4;
+      var W = 560, H = 400, n = 30, step = 28, r = 9.4;
       var R = D.rng(9), free = [];
       for (var i = 0; i < n; i++) free.push([38 + R() * (W - 76), 34 + R() * (H - 68)]);
-      function pos(F, k, cx) { return chainAt(F, n, cx == null ? W / 2 : cx, H / 2, step, k); }
+      var still = { yaw: 0, pitch: 0 };
+      function at(F, k, cx, cy, view) { return project(chain3At(F, n, k), view || still, cx == null ? W / 2 : cx, cy == null ? H / 2 : cy, step); }
+      function turnAfter(t, t0) { return { yaw: .9 * ease(seg(t, t0, t0 + 2)), pitch: 0 }; }
+      function boxOfQ(Q) { return boxOf(Q.map(function (q) { return [q.x, q.y]; }), r + 8); }
       return scene(W, H, {
         draw: function (c, t, amb) {
           if (t < 11) {
             /* each amino acid arrives in turn, and a link forms only when both of its amino acids are in place */
-            var line = pos(FOLD1, 0), done = 0;
-            var pts = line.map(function (p, j) {
+            var line = at(FOLD1, 0), done = 0;
+            var Q = line.map(function (p, j) {
               var a = free[j], t0 = 4.8 + j * .13, kk = ease(seg(t, t0, t0 + .9)), w = 1 - kk;
               if (t >= t0 + .9 && done === j) done = j + 1;
-              return [lerp(a[0] + Math.sin(amb * .6 + j * 2) * 5 * w, p[0], kk), lerp(a[1] + Math.cos(amb * .5 + j * 3) * 5 * w, p[1], kk)];
+              return { x: lerp(a[0] + Math.sin(amb * .6 + j * 2) * 5 * w, p.x, kk), y: lerp(a[1] + Math.cos(amb * .5 + j * 3) * 5 * w, p.y, kk), z: 0 };
             });
-            if (done > 1) {
-              c.strokeStyle = '#8496AA'; c.lineWidth = r * .55; c.lineCap = 'round'; c.beginPath();
-              for (var q = 0; q < done; q++) c[q ? 'lineTo' : 'moveTo'](pts[q][0], pts[q][1]);
-              c.stroke();
-            }
-            pts.forEach(function (p, j) { D.bead(c, p[0], p[1], r, KINDS1[j]); });
+            drawChain3(c, Q, KINDS1, r, Math.max(1, done), null, step);
           } else if (t < 17.5) {
-            drawChain(c, pos(FOLD1, ease(seg(t, 11.3, 16.6))), KINDS1, r);
-            if (t >= 16.6) drawBox(c, boxOf(pos(FOLD1, 1), r + 8), clamp((t - 16.6) / .4));
-          } else {
-            /* the first protein stays in view, so the two shapes can be compared */
-            var mv = ease(seg(t, 17.7, 19.2));
-            drawChain(c, pos(FOLD1, 1, lerp(W / 2, W * .27, mv)), KINDS1, r);
+            /* the picture keeps still while the chain folds, then turns a little, so its depth can be seen */
+            var Q1 = at(FOLD1, ease(seg(t, 11.3, 15.4)), W / 2, H / 2, turnAfter(t, 15.5));
+            drawChain3(c, Q1, KINDS1, r, null, null, step);
+            if (t >= 16.6) drawBox(c, boxOfQ(Q1), clamp((t - 16.6) / .4));
+          } else if (t < 25) {
+            /* the first protein waits higher up while the second chain joins along the foot, then both stand side by side */
+            var mv = ease(seg(t, 17.7, 19.2)), back = ease(seg(t, 21.3, 24.2)), v1 = turnAfter(t, 15.5);
+            drawChain3(c, at(FOLD1, 1, lerp(W / 2, W * .27, mv), lerp(H / 2, H * .3, mv * (1 - back)), v1), KINDS1, r, null, null, step);
             /* the second chain joins along the foot of the picture, where its own sequence can be seen, and then folds */
             if (t >= 19.4) {
-              var fk = ease(seg(t, 21.3, 24.2)), cx2 = lerp(W / 2, W * .73, fk), cy2 = lerp(H - 62, H / 2, fk);
-              drawChain(c, chainAt(FOLD2, n, cx2, cy2, step, fk), KINDS2, r, 1, 1 + seg(t, 19.4, 21.2) * (n - 1));
+              var fk = ease(seg(t, 21.3, 24.2)), cx2 = lerp(W / 2, W * .73, fk), cy2 = lerp(H - 88, H / 2, fk);
+              drawChain3(c, at(FOLD2, fk, cx2, cy2, v1), KINDS2, r, 1 + seg(t, 19.4, 21.2) * (n - 1), null, step);
             }
-            if (t >= 24.2) {
-              var ba = clamp((t - 24.2) / .4);
-              drawBox(c, boxOf(chainAt(FOLD1, n, W * .27, H / 2, step, 1), r + 8), ba); drawBox(c, boxOf(chainAt(FOLD2, n, W * .73, H / 2, step, 1), r + 8), ba);
+            if (t >= 24.2) { var ba = clamp((t - 24.2) / .4); drawBox(c, boxOfQ(at(FOLD1, 1, W * .27, H / 2, v1)), ba); drawBox(c, boxOfQ(at(FOLD2, 1, W * .73, H / 2, v1)), ba); }
+          } else {
+            /* one picture leaves before the next arrives */
+            var inA = seg(t, 25.4, 26.2), view = { yaw: -.35 + .5 * ease(seg(t, 29.6, 34.6)), pitch: .12 };
+            if (t < 25.4) { var outA = 1 - seg(t, 25, 25.4); drawChain3(c, at(FOLD1, 1, W * .27, H / 2, turnAfter(t, 15.5)), KINDS1, r, null, outA, step); drawChain3(c, at(FOLD2, 1, W * .73, H / 2, turnAfter(t, 15.5)), KINDS2, r, null, outA, step); }
+            else {
+              onLayer(c, inA, function (g) { drawAmylase(g, W / 2, H / 2 + 6, 36, view, seg(t, 30, 33.2), t < 26.4 || t > 29.4 ? null : seg(t, 26.4, 29.4)); });
+              /* the name stands for the whole molecule */
+              if ((t >= 26.4 && t < 30) || t >= 33.2) drawBox(c, amylaseBox(W / 2, H / 2 + 6, 36, view), clamp(t < 30 ? (t - 26.4) / .4 : (t - 33.2) / .4));
             }
           }
         },
         labels: function (t) {
           if (t < 4.6) return [{ id: 'a', text: 'one amino acid', x: free[4][0], y: free[4][1] - 7, side: 'T' }];
-          if (t >= 16.6 && t < 17.5) { var b0 = boxOf(pos(FOLD1, 1), r + 8); return [{ id: 'p', text: 'one protein', x: b0.cx, y: b0.y, side: 'T' }]; }
-          if (t >= 24.2) {
-            var b1 = boxOf(chainAt(FOLD1, n, W * .27, H / 2, step, 1), r + 8), b2 = boxOf(chainAt(FOLD2, n, W * .73, H / 2, step, 1), r + 8);
+          if (t >= 16.6 && t < 17.5) { var b0 = boxOfQ(at(FOLD1, 1, W / 2, H / 2, turnAfter(t, 15.5))); return [{ id: 'p', text: 'one protein', x: b0.cx, y: b0.y, side: 'T' }]; }
+          if (t >= 24.2 && t < 25) {
+            var v1 = turnAfter(t, 15.5), b1 = boxOfQ(at(FOLD1, 1, W * .27, H / 2, v1)), b2 = boxOfQ(at(FOLD2, 1, W * .73, H / 2, v1));
             return [{ id: 'p1', text: 'one protein', x: b1.cx, y: b1.y, side: 'T' }, { id: 'p2', text: 'a different protein', x: b2.cx, y: b2.y, side: 'T' }];
           }
+          if (t >= 26.4 && t < 30) { var ba = amylaseBox(W / 2, H / 2 + 6, 36, { yaw: -.35, pitch: .12 }); return [{ id: 'am', text: 'amylase', x: ba.cx, y: ba.y, side: 'T' }]; }
+          if (t >= 33.2) { var bs = amylaseBox(W / 2, H / 2 + 6, 36, { yaw: -.35 + .5 * ease(seg(t, 29.6, 34.6)), pitch: .12 }); return [{ id: 'sf', text: 'amylase as a smooth shape', x: bs.cx, y: bs.y, side: 'T' }]; }
           return [];
         }
       });
