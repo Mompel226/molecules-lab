@@ -20,7 +20,8 @@
     dcpip: [['add', 'Add the food, one drop at a time']]
   };
   var NUTRIENTS = [['starch', 'starch'], ['sugar', 'reducing sugar'], ['protein', 'protein'], ['fat', 'fat or oil'], ['vitc', 'vitamin C']];
-  var POOL = ['cornflour', 'honey', 'tablesugar', 'gelatine', 'sesame', 'kiwi', 'tofu'];
+  /* the mystery foods are new to the pupil: never one of the foods they have just tested */
+  var POOL = global.MolTests.FOODS.filter(function (f) { return f.mystery; }).map(function (f) { return f.id; });
 
   var B = global.MolBench = {
     food: 'cornflour', test: 'iodine', stage: 0, k: 1, busy: false, msg: '', log: {}, myst: null, mystLog: {}, picks: {}, verdict: null, fns: [],
@@ -47,7 +48,7 @@
       }
       if (this.busy) return;
       if (this.myst) this.mystLog[this.test] = 1; else this.log[f + '|' + this.test] = 1;
-      this.msg = 'Result: ' + T.word(this.test, f) + '.';
+      this.msg = 'Recorded in your notebook: ' + T.word(this.test, f) + '.';
       this.tell();
     },
     mystery: function () {
@@ -113,7 +114,7 @@
     };
     var V = MV({
       scene: scene, aria: 'A test tube on a rack with the chosen food. Press the buttons to carry out the chosen food test.',
-      barLabel: 'Carry out the test', buttons: [['act', 'Add', 'memv__btn--go'], ['read', 'Observe the result'], ['new', 'New tube']], read: [['t', 'Test:']],
+      barLabel: 'Carry out the test', buttons: [['act', 'Add', 'memv__btn--go'], ['read', 'Record the result'], ['new', 'New tube']], read: [['t', 'Test:']],
       onButton: function (id) {
         if (id === 'act') { B.act(V.isStill()); V.paint(); }
         else if (id === 'read') B.read();
@@ -145,7 +146,7 @@
     box.appendChild(h('p', 'bn__h', '2. Choose a test'));
     box.appendChild(tests);
     box.appendChild(say);
-    box.appendChild(h('p', 'bn__h', '3. Your notebook: what you have seen'));
+    box.appendChild(h('p', 'bn__h', '3. Your notebook: the results you have recorded'));
     box.appendChild(grid);
     box.appendChild(h('p', 'bn__h', '4. A mystery food'));
     box.appendChild(my);
@@ -153,7 +154,7 @@
       var b = h('button', 'bn__chip', label); b.type = 'button'; b.setAttribute('data-id', id); b.addEventListener('click', function () { click(id); }); row.appendChild(b); return b;
     }
     var fB = {}, tB = {};
-    T.FOODS.forEach(function (f) { fB[f.id] = chip(foods, f.id, f.name, function (id) { B.setFood(id); }); });
+    T.FOODS.forEach(function (f) { if (!f.mystery) fB[f.id] = chip(foods, f.id, f.name, function (id) { B.setFood(id); }); });
     T.ORDER.forEach(function (id) { tB[id] = chip(tests, id, T.TESTS[id].short, function (x) { B.setTest(x); }); });
 
     var cells = {}, tbl = h('table', 'bn__t');
@@ -161,10 +162,15 @@
     tbl.innerHTML = '<thead>' + head + '</thead><tbody></tbody>';
     var tb = tbl.querySelector('tbody');
     T.FOODS.forEach(function (f) {
+      if (f.mystery) return;
       var tr = h('tr'); tr.appendChild(h('th', '', L.esc(f.name))); tr.firstChild.setAttribute('scope', 'row');
       T.ORDER.forEach(function (id) { var td = h('td'); td.innerHTML = '<span class="bn__c" aria-label="not tested yet"></span>'; tr.appendChild(td); cells[f.id + '|' + id] = td.firstChild; });
       tb.appendChild(tr);
     });
+    /* the mystery food has its own row, so each result recorded for it can be seen (Daniel, 25 Nov 2026) */
+    var mTr = h('tr', 'bn__mrow'), mCells = {}; mTr.appendChild(h('th', '', 'mystery food')); mTr.firstChild.setAttribute('scope', 'row');
+    T.ORDER.forEach(function (id) { var td = h('td'); td.innerHTML = '<span class="bn__c" aria-label="not tested yet"></span>'; mTr.appendChild(td); mCells[id] = td.firstChild; });
+    tb.appendChild(mTr);
     grid.appendChild(tbl);
 
     /* the mystery food */
@@ -180,7 +186,7 @@
       Object.keys(fB).forEach(function (id) { fB[id].setAttribute('aria-pressed', !B.myst && B.food === id ? 'true' : 'false'); });
       Object.keys(tB).forEach(function (id) { tB[id].setAttribute('aria-pressed', B.test === id ? 'true' : 'false'); });
       say.textContent = B.msg || 'Press the buttons on the picture.';
-      say.classList.toggle('is-res', /^Result/.test(B.msg));
+      say.classList.toggle('is-res', /^Recorded/.test(B.msg));
       Object.keys(cells).forEach(function (k) {
         var q = k.split('|'), seen = B.log[k];
         cells[k].style.background = seen ? T.chip(q[1], q[0]) : '';
@@ -188,11 +194,19 @@
         cells[k].setAttribute('aria-label', seen ? T.word(q[1], q[0]) : 'not tested yet');
       });
       var m = !!B.myst;
+      mTr.hidden = !m;
+      T.ORDER.forEach(function (id) {
+        var seen = m && B.mystLog[id];
+        mCells[id].style.background = seen ? T.chip(id, B.myst) : '';
+        mCells[id].classList.toggle('is-on', !!seen);
+        mCells[id].setAttribute('aria-label', seen ? T.word(id, B.myst) : 'not tested yet');
+      });
+      mTr.firstChild.textContent = B.verdict === 'right' ? 'mystery food: ' + T.BY[B.myst].name : 'mystery food';
       mText.hidden = mRow.hidden = mChk.hidden = !m;
       mGo.textContent = m ? 'Another mystery food' : 'Give me a mystery food';
       if (m) {
         var n = Object.keys(B.mystLog).length;
-        mText.textContent = 'Carry out all five tests on it (' + n + ' of 5 done), then choose what it contains.';
+        mText.textContent = 'Carry out all five tests and record each result: it has its own row in your notebook (' + n + ' of 5 recorded). Then choose what it contains.';
         NUTRIENTS.forEach(function (x) { nB[x[0]].setAttribute('aria-pressed', B.picks[x[0]] ? 'true' : 'false'); });
       }
       mOut.textContent = !B.verdict ? '' : B.verdict === 'right' ? 'Correct: this food was ' + T.BY[B.myst].name + '.'

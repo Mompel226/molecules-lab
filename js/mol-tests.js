@@ -23,7 +23,13 @@
     { id: 'gelatine', name: 'gelatine', look: { col: '#F4EDD3' }, has: { protein: 1 } },
     { id: 'sesame', name: 'sesame oil', look: { col: C.water, oil: 1 }, neat: { col: '#E6C25A' }, has: { fat: 1 } },
     { id: 'kiwi', name: 'kiwi fruit', look: { col: '#DDEBC0', bits: 14, bitsCol: 'rgba(60,80,30,.5)' }, has: { sugar: 3, vitc: 1, protein: .3 } },
-    { id: 'tofu', name: 'tofu', look: { col: '#EDE9DA', cloud: .4 }, has: { protein: 1, fat: .35 } }
+    { id: 'tofu', name: 'tofu', look: { col: '#EDE9DA', cloud: .4 }, has: { protein: 1, fat: .35 } },
+    /* mystery foods only: new to the pupil, each with clear results (Daniel, 25 Nov 2026: "the mystery food might be something
+       different than the usual ones"). Whole milk: lactose is a reducing sugar, about 4.7 %; protein and fat. Strawberry: glucose and
+       fructose, and plenty of vitamin C. Beef mince: protein and fat, no sugar, no starch, no vitamin C. */
+    { id: 'milk', name: 'milk', mystery: true, look: { col: '#F3F3EC', cloud: .9 }, neat: { col: '#F3F3EC', cloud: .9, stays: true }, has: { sugar: 3, protein: 1, fat: 1 } },
+    { id: 'strawberry', name: 'strawberry', mystery: true, look: { col: '#F1BFC3', bits: 12, bitsCol: 'rgba(150,40,50,.5)' }, neat: { col: '#D9485A' }, has: { sugar: 3, vitc: 1 } },
+    { id: 'beef', name: 'beef mince', mystery: true, look: { col: '#E8D0C8', cloud: .4, bits: 14, bitsCol: 'rgba(120,60,50,.55)' }, neat: { col: '#C98E86', bits: 16, bitsCol: 'rgba(120,60,50,.6)' }, has: { protein: 1, fat: 1 } }
   ];
   var BY = {}; FOODS.forEach(function (f) { BY[f.id] = f; });
 
@@ -93,8 +99,10 @@
       if (h.vitc) q.col = D.mixHex(q.col, l.col, done);   /* colourless, or the pale colour of the food: never a white */
     } else if (test === 'emulsion') {
       /* in ethanol the fat dissolves: a clear liquid. Poured into water (done), the fat comes out as tiny droplets */
-      q.col = D.mixHex(l.col, f.id === 'sesame' ? '#EFE6BE' : C.clear, added); q.oil = 0; q.cloud = (l.cloud || 0) * (1 - added);
-      q.bits = 0;
+      /* milk is mostly water and is already cloudy: it stays cloudy in ethanol. A solid food keeps its pieces in the ethanol;
+         only the liquid is poured into the water */
+      q.col = l.stays ? l.col : D.mixHex(l.col, f.id === 'sesame' ? '#EFE6BE' : C.clear, added); q.oil = 0; q.cloud = (l.cloud || 0) * (l.stays ? 1 : 1 - added);
+      q.bits = done > 0 ? 0 : l.bits || 0;
       if (done > 0) { q.col = D.mixHex(q.col, C.clear, done); q.cloud = (h.fat || 0) * done * (h.fat >= 1 ? .95 : .5); }
     }
     return q;
