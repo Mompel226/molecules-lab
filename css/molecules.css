@@ -9,6 +9,9 @@
   --accent:#0F6B57; --accent-2:#107A63; --accent-tint:#E3F2EC;
   /* the inks of the Learn tab (js/terms.js): structures, processes, substances, as in his topic summaries */
   --k-struct:#1B7A43; --k-proc:#B5530F; --k-subst:#B4285F;
+  /* the same inks on an animation step's tinted level band (IGCSE green, IB violet), where a merged card's words now stand
+     (27 Nov 2026): #1B7A43 read 4.48:1 on the IB band; these darker shades read 5.6:1 or more on both */
+  --k-struct-band:#17693A; --k-proc-band:#9A4509;
   --on-photo-veil:rgba(14,20,27,.40);
   /* the parts of a station (a block of What you need to know, and its button on the picture): blue and teal, far from the
      inks of the words (green, orange, rose); the teal is close to the lab's own (violet until 11 Nov 2026, when violet came to mean extension; Daniel chose teal) */
@@ -18,12 +21,14 @@
 :root:not([data-theme="light"]){
   --accent:#8FE3C8; --accent-2:#6FD4B4; --accent-tint:#173029;
   --k-struct:#6EDB9A; --k-proc:#F5A35C; --k-subst:#F48FB4;
+  --k-struct-band:#6EDB9A; --k-proc-band:#F5A35C;
   --pt1-ink:#8DB9FF; --pt1-tint:#14233A; --pt1-edge:#2C4C7A; --pt2-ink:#7FD8C9; --pt2-tint:#12302C; --pt2-edge:#2D6A61;
 }
 }
 :root[data-theme="dark"]{
   --accent:#8FE3C8; --accent-2:#6FD4B4; --accent-tint:#173029;
   --k-struct:#6EDB9A; --k-proc:#F5A35C; --k-subst:#F48FB4;
+  --k-struct-band:#6EDB9A; --k-proc-band:#F5A35C;
   --pt1-ink:#8DB9FF; --pt1-tint:#14233A; --pt1-edge:#2C4C7A; --pt2-ink:#7FD8C9; --pt2-tint:#12302C; --pt2-edge:#2D6A61;
 }
 
@@ -215,6 +220,7 @@ svg .lb__lead,svg .lb__halo{vector-effect:non-scaling-stroke}
 
 /* the inks of this lab (js/terms.js) */
 .t--struct{color:var(--k-struct)} .t--proc{color:var(--k-proc)} .t--subst{color:var(--k-subst)}
+.sp__lv .t--struct{color:var(--k-struct-band)} .sp__lv .t--proc{color:var(--k-proc-band)}
 .chip--struct{background:var(--k-struct);color:var(--on-ink)} .chip--proc{background:var(--k-proc);color:var(--on-ink)}
 .chip--subst{background:var(--k-subst);color:var(--on-ink)}
 

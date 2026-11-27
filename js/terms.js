@@ -142,7 +142,9 @@
   var NOT_HERE = {
     /* in this lab a "carrier" alone is a protein carrier, never the person with a recessive allele (the glossary's "carrier") */
     'carrier':  [{ before: /$/ }],
-    'carriers': [{ before: /$/ }]
+    'carriers': [{ before: /$/ }],
+    /* "hydrogen bonds" (the IB lines on cellulose, proteins and DNA) are bonds, not the element hydrogen */
+    'hydrogen': [{ after: /^\s*bonds?\b/i }]
   };
   function wrongSense(low, before, after, whole) {
     var rules = NOT_HERE[low];
