@@ -117,7 +117,7 @@
     var WHERE = { glucose: 'dissolved in cytoplasm and blood', starch: 'a store in plant cells', glycogen: 'a store in liver and muscle cells', cellulose: 'the cell walls of plants' };
     /* Inside starch: an extension, opened only from Starch. Each state says its level and what IGCSE needs (Daniel, 24 Nov 2026) */
     var sub = null, was = null, sk = 1, spin = .18, iod = 1;
-    /* with iodine: the helix stands high and the spotting tile low, with room between them for "Drag to turn" */
+    /* with iodine: the helix stands high and the spotting tile low */
     var IY = 112;
     var LEVEL = {
       two: ['Beyond the syllabus:', 'two kinds of molecule. For IGCSE: starch is made from glucose'],
@@ -190,9 +190,7 @@
         var b = S.polyBox(LAY[cur]);
         return [{ id: cur, text: cur, x: b.cx, y: b.y, side: 'T' }];
       },
-      read: function (pill) { if (sub) pill('w', LEVEL[sub][1], 'ext', LEVEL[sub][0]); else pill('w', WHERE[cur], '', 'Where:'); },
-      /* with iodine, the spotting tile fills the lower part: "Drag to turn" stands above it, beside the helix */
-      hintY: function () { return sub === 'iodine' ? 254 : null; }
+      read: function (pill) { if (sub) pill('w', LEVEL[sub][1], 'ext', LEVEL[sub][0]); else pill('w', WHERE[cur], '', 'Where:'); }
     };
     var ONE = 'one glucose molecule', LINK = 'link between two glucose molecules', CROSS = 'links between the chains', IOD = 'iodine atom';
     var V = MV({
@@ -212,7 +210,9 @@
       B2.el.style.visibility = cur === 'starch' ? '' : 'hidden';
       Object.keys(B2b).forEach(function (q) { B2b[q].hidden = q === 'inside' ? !!sub : !sub; });
       B2.press(sub);
-      TURN.enable(sub === 'amylose' || sub === 'iodine');
+      /* only Amylose turns: with iodine the picture is the helix over its spotting tile, iodine alone and with starch, and a
+         chip there was in the way (Daniel, 27 Nov 2026: "that tag drag to turn, it's a bit bothery, so remove it") */
+      TURN.enable(sub === 'amylose');
     }
     function show(id) {
       if (id === sub && id !== 'iodine') return;

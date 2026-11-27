@@ -117,7 +117,21 @@
         tsLast = ts;
         raf = requestAnimationFrame(amble);
       }
-      sp = L.stepper({ steps: K.readerSteps(cfg.steps, TL.R), end: TL.end, render: draw, flow: TL.flow, stills: K.stillsOf(cfg.steps, TL) });
+      /* a sentence card that only repeated a step is merged into it (Daniel, 27 Nov 2026: "you're not removing information
+         necessarily, you're just kind of merging everything within the animation button"; app.js `inFilm`). spec.cards[i] =
+         { html: [its sentences, marked], head? }: they stand where the step's own line marked 'card' (the words the card
+         said) stood, or first; the step's other lines stay, because they add to the card; with `head` the step takes the
+         card's heading. Without cards the film keeps every line of its own */
+      var steps = !spec.cards ? cfg.steps : cfg.steps.map(function (st, i) {
+        var c = spec.cards[i]; if (!c) return st;
+        var o = {}, k, mine = c.html.map(function (x) { return ['ig', x, 'html']; }), out = [], put = false;
+        for (k in st) o[k] = st[k];
+        (st.p || []).forEach(function (q) { if (q[2] === 'card') { if (!put) { out = out.concat(mine); put = true; } } else out.push(q); });
+        o.p = put ? out : mine.concat(out);
+        if (c.head) o.h = c.head;
+        return o;
+      });
+      sp = L.stepper({ steps: K.readerSteps(steps, TL.R), end: TL.end, render: draw, flow: TL.flow, stills: K.stillsOf(steps, TL) });
       var box = K.mount(S, sp, 'mf', cfg.key ? [{ key: cfg.key }].concat(cfg.notes || []) : (cfg.notes || []), function (Dw, nar) {
         narrow = nar;
         lay = frame(svg, bg, scene.W, scene.H, Dw, nar, 14.5);
@@ -215,17 +229,15 @@
       scene.ext = lay.vb.ext;
       return true;
     }
-    /* where the frame's corners are on the screen, for what stands inside them (the "Drag to turn" chip, the i). A scene
-       whose drawing fills the lower left corner in one state gives scene.hintY(): the chip then stands with its foot there */
+    /* where the frame's corners are on the screen, for what stands inside them (the "Drag to turn" chip, the i) */
     var cornersWas = '';
     function corners() {
       var fw = fig.clientWidth, fh = fig.clientHeight; if (!fw || !fh || !lay) return;
       var vb = lay.vb, s = Math.min(fw / vb.w, fh / vb.h), sx = (fw - vb.w * s) / 2, sy = (fh - vb.h * s) / 2;
-      var hy = scene.hintY ? scene.hintY() : null, hb = hy == null ? sy + vb.bB * s : sy + (vb.y + vb.h - hy) * s;
-      var v = [Math.round(sx + 2 * s), Math.round(sy + vb.bB * s), Math.round(hb)].join(' ');
+      var v = [Math.round(sx + 2 * s), Math.round(sy + vb.bB * s)].join(' ');
       if (v === cornersWas) return; cornersWas = v; v = v.split(' ');
       fig.style.setProperty('--fl', v[0] + 'px'); fig.style.setProperty('--fr', v[0] + 'px');
-      fig.style.setProperty('--fb', v[1] + 'px'); fig.style.setProperty('--hb', v[2] + 'px');
+      fig.style.setProperty('--fb', v[1] + 'px');
     }
     function names() {
       if (!lay) return;

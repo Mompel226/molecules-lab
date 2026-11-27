@@ -486,7 +486,39 @@
     return f;
   }
 
-  var MAKERS = [['video', video], ['watch', watch], ['curio', curio], ['labelphoto', labelphoto], ['figure', figure], ['greycat', greycat]];
+  /* ---------- the 20 amino acids: a row each, its bead in its own colour ----------
+     Daniel, 27 Nov 2026: one sentence ("Proteins are made from 20 different kinds") was "kind of a lame thing … add then the
+     20 different ones there as a list … what the 20 different ones are known to be important for … Be accurate". The IB
+     guide's own line comes first (B1.2.3, its chip); then the essential nine and the other eleven, each with what it is known
+     for, marked beyond IB unless a part names its IB statement; a grey label names the 0610 section where the idea comes back.
+     Each bead wears the colour its amino acid has in this station's pictures: MolDraw.AA, in the order mol-films.js reads
+     amylase's letters (ORDER), so the two can never disagree. A row's text is a list of parts: a string, or { t, ib } */
+  function aminoacids(spec) {
+    var D = global.MolDraw, ORDER = 'ACDEFGHIKLMNPQRSTVWY';
+    var chip = function (cls, t) { return '<span class="aat__chip aat__chip--' + cls + '">' + esc(t) + '</span>'; };
+    var box = h('section', 'aat');
+    if (spec.ib) box.appendChild(h('p', 'aat__ib', chip('ib', spec.ib.ref) + ' ' + esc(spec.ib.text)));
+    box.appendChild(h('div', 'aat__h', '<span class="aat__ht">' + esc(spec.known) + '</span>' + chip('bey', spec.beyond)));
+    if (spec.lead) box.appendChild(h('p', 'aat__lead', esc(spec.lead)));
+    (spec.groups || []).forEach(function (g) {
+      box.appendChild(h('h5', 'aat__g', esc(g.head)));
+      var ul = h('ul', 'aat__list');
+      g.rows.forEach(function (r) {
+        var col = D && D.AA ? D.AA[ORDER.indexOf(r.k)] : '#CBD5E1';
+        var words = (r.text || []).map(function (q) { return typeof q === 'string' ? esc(q) : esc(q.t) + ' ' + chip('ib', q.ib); }).join(' ');
+        ul.appendChild(h('li', 'aat__row',
+          '<span class="aat__bead" style="--c:' + col + '" aria-hidden="true">' + esc(r.k) + '</span>' +
+          '<div class="aat__txt"><div class="aat__name"><b>' + esc(r.name) + '</b><span class="aat__abbr">' + esc(r.abbr) + ' · ' + esc(r.k) + '</span></div>' +
+          '<p class="aat__p">' + words + (r.topic ? ' ' + chip('0610', r.topic) : '') + '</p></div>'));
+      });
+      box.appendChild(ul);
+    });
+    (spec.foot || []).forEach(function (t) { box.appendChild(h('p', 'aat__foot', esc(t))); });
+    if (spec.source) box.appendChild(h('p', 'aat__src', esc(spec.source)));
+    return box;
+  }
+
+  var MAKERS = [['video', video], ['watch', watch], ['curio', curio], ['labelphoto', labelphoto], ['figure', figure], ['greycat', greycat], ['aminoacids', aminoacids]];
   global.CircLearn = { add: function (name, fn) { MAKERS.push([name, fn]); W.register(name, fn); }, diagram: function (name, fn) { DIAGRAMS[name] = fn; },
                        h: h, esc: esc, mk: mk, head: head, svgEl: svgEl, stage: stage,
                        holdPlate: STAGE.hold, releasePlate: STAGE.release, dropPlateHold: STAGE.dropHold };

@@ -430,6 +430,9 @@
                        chain3At: chain3At, project: project, inside: inside, drawChain3: drawChain3, KINDS1: KINDS1, KINDS2: KINDS2, FOLD1: FOLD1, FOLD2: FOLD2, FOLD_FROM: [68, 401], amylase: amylase, drawRealProtein: drawAmylase, realBox: amylaseBox };
 
   /* ==================================================================================== 1. from a chain to its atoms */
+  /* A step line marked 'card' says what a sentence card of What you need to know says (Daniel, 27 Nov 2026: one place for each
+     idea). Where the station merges that card into the step (its master's `inFilm`), the card's own words stand there instead,
+     marked as the card's were; every other line stays, because it adds to the card. Without the card the line is drawn. */
   L.add('atomsfilm', Film({
     title: 'From a large molecule to its atoms',
     aria: 'A long chain of starch. The picture moves in to one glucose molecule, which is shown as a model of its atoms: carbon, hydrogen and oxygen.',
@@ -487,11 +490,11 @@
     key: [['glucose', 'one glucose molecule'], ['linked', 'link between two glucose molecules', [1, 2, 3, 4]], ['hbond', 'links between the chains', [4]]],
     M: [0, 4.5, 10, 16.5, 23, 29.5],
     steps: [
-      { t: 0, still: 4, h: 'Glucose', p: [['ig', 'Each ring is one **glucose** molecule. Glucose is a small, soluble molecule.']] },
+      { t: 0, still: 4, h: 'Glucose', p: [['ig', 'Each ring is one **glucose** molecule.'], ['ig', 'Glucose is a small, soluble molecule.', 'card']] },
       { t: 4.5, still: 9.6, h: 'Glucose molecules join', p: [['ig', 'Many glucose molecules join in a chain and make one **large molecule**.']] },
-      { t: 10, still: 16, h: 'Starch', p: [['ig', '**Starch** is made from glucose. It is the store of carbohydrate in **plants**.'], ['ib', 'Its chains are coiled or branched.']] },
-      { t: 16.5, still: 22.5, h: 'Glycogen', p: [['ig', '**Glycogen** is made from glucose. It is the store of carbohydrate in **animals**, in the liver and the muscles.'], ['bey', 'It has many more branches than starch.']] },
-      { t: 23, still: 29, h: 'Cellulose', p: [['ig', '**Cellulose** is made from glucose. It makes the **cell walls** of plants.'], ['ib', 'Its straight chains lie side by side, which makes a strong fibre.']] }
+      { t: 10, still: 16, h: 'Starch', p: [['ig', '**Starch** is made from glucose. It is the store of carbohydrate in **plants**.', 'card'], ['ib', 'Its chains are coiled or branched.']] },
+      { t: 16.5, still: 22.5, h: 'Glycogen', p: [['ig', '**Glycogen** is made from glucose. It is the store of carbohydrate in **animals**, in the liver and the muscles.', 'card'], ['bey', 'It has many more branches than starch.']] },
+      { t: 23, still: 29, h: 'Cellulose', p: [['ig', '**Cellulose** is made from glucose. It makes the **cell walls** of plants.', 'card'], ['ib', 'Its straight chains lie side by side, which makes a strong fibre.']] }
     ],
     make: function () {
       var W = POLY.W, H = POLY.H;
@@ -532,8 +535,8 @@
     key: [['glycerol', 'glycerol'], ['joinpt', 'place where a fatty acid joins', [0]], ['fatty', 'fatty acid'], ['atO', 'acid end of a fatty acid'], ['water', 'water released (IB)', [1]]],
     M: [0, 4.5, 11, 17],
     steps: [
-      { t: 0, still: 4.2, h: 'The two kinds of small molecule', p: [['ig', 'A fat or an oil is made from two kinds of smaller molecule: **glycerol** and **fatty acids**.']] },
-      { t: 4.5, still: 10.8, h: 'Three fatty acids join', p: [['ig', '**Three** fatty acids join to **one** glycerol.'], ['ib', 'Each join is a condensation reaction that releases a molecule of water.']] },   /* IB B1.1.9 */
+      { t: 0, still: 4.2, h: 'The two kinds of small molecule', p: [['ig', 'A fat or an oil is made from two kinds of smaller molecule: **glycerol** and **fatty acids**.', 'card']] },
+      { t: 4.5, still: 10.8, h: 'Three fatty acids join', p: [['ig', '**Three** fatty acids join to **one** glycerol.', 'card'], ['ib', 'Each join is a condensation reaction that releases a molecule of water.']] },   /* IB B1.1.9 */
       { t: 11, still: 16.6, h: 'One fat molecule', p: [['ig', 'The result is one molecule of **fat** (or oil). Fats and oils contain carbon, hydrogen and oxygen.'], ['ib', 'This molecule is called a triglyceride.']] }
     ],
     make: function () {
@@ -582,11 +585,11 @@
     key: [['amino', 'an amino acid (each colour is one kind)'], ['chainEnd', 'an end of the chain', [1, 2, 3]], ['protSurf', 'the folded chain, drawn as a smooth shape', [4]]],
     M: [0, 4.5, 11, 17.5, 26.5, 38.5],
     steps: [
-      { t: 0, still: 4.2, h: 'Amino acids', p: [['ig', 'Proteins are made from small molecules called **amino acids**. Here, each colour is one kind of amino acid.'], ['ib', 'There are 20 different kinds of amino acid in proteins.']] },   /* IB B1.2.4 */
-      { t: 4.5, still: 10.8, h: 'A chain', p: [['ig', 'Amino acids join, one after another, in a **chain**.']] },
-      { t: 11, still: 17.2, h: 'The chain folds', p: [['ig', 'The chain **folds** into its own **3D shape**. The chain does not become longer or shorter: only its shape changes.']] },
-      { t: 17.5, still: 26.1, h: 'A different sequence', p: [['ig', 'Amino acids in a different **sequence** (order) join and fold into a **different protein**, with a different shape.']] },
-      { t: 26.5, still: 38, h: 'A real protein', p: [['ig', 'A real protein is a much longer chain. **Amylase**, the enzyme in saliva, has 496 amino acids. The picture adds them one after another, in the order of the chain.'], ['ig', 'Pictures often show a protein as one **smooth shape**. This smooth shape is the folded chain itself: every amino acid is still inside it.']] }
+      { t: 0, still: 4.2, h: 'Amino acids', p: [['ig', 'Proteins are made from small molecules called **amino acids**.', 'card'], ['ig', 'Here, each colour is one kind of amino acid.'], ['ib', 'There are 20 different kinds of amino acid in proteins.']] },   /* IB B1.2.4 */
+      { t: 4.5, still: 10.8, h: 'A chain', p: [['ig', 'Amino acids join, one after another, in a **chain**.', 'card']] },
+      { t: 11, still: 17.2, h: 'The chain folds', p: [['ig', 'The chain **folds** into its own **3D shape**.', 'card'], ['ig', 'The chain does not become longer or shorter: only its shape changes.']] },
+      { t: 17.5, still: 26.1, h: 'A different sequence', p: [['ig', 'Amino acids in a different **sequence** (order) join and fold into a **different protein**, with a different shape.', 'card']] },
+      { t: 26.5, still: 38, h: 'A real protein', p: [['ig', 'A real protein is a much longer chain. **Amylase**, the enzyme in saliva, has 496 amino acids.', 'card'], ['ig', 'The picture adds them one after another, in the order of the chain.'], ['ig', 'Pictures often show a protein as one **smooth shape**. This smooth shape is the folded chain itself: every amino acid is still inside it.', 'card']] }
     ],
     make: function () {
       var W = 560, H = 400, n = 30, step = 28, r = 9.4;
@@ -663,10 +666,10 @@
     key: [['strand', 'strand'], ['bases', 'bases', null, 'ATCG'], ['hbond', 'bonds between the bases', [2, 3]]],
     M: [0, 4.5, 11, 16, 23],
     steps: [
-      { t: 0, still: 4.2, h: 'One strand', p: [['ig', 'A DNA molecule has **two strands**. Here is one of them. Each strand contains chemicals called **bases**: **A**, **T**, **C** and **G**.']] },
-      { t: 4.5, still: 10.8, h: 'The bases pair', p: [['ig', 'The second strand lies beside the first. The bases always pair in the same way: **A with T**, and **C with G**.']] },
-      { t: 11, still: 15.8, h: 'Bonds', p: [['ig', '**Bonds** between the pairs of bases hold the two strands together.'], ['ib', 'These are hydrogen bonds.'], ['bey', 'A and T have two bonds; C and G have three.']] },   /* IB A1.2.6 */
-      { t: 16, still: 22.6, h: 'A double helix', p: [['ig', 'The two strands are **coiled** together to form a **double helix**.']] }
+      { t: 0, still: 4.2, h: 'One strand', p: [['ig', 'A DNA molecule has **two strands**. Each strand contains chemicals called **bases**: **A**, **T**, **C** and **G**.', 'card'], ['ig', 'The picture shows one of the two strands.']] },
+      { t: 4.5, still: 10.8, h: 'The bases pair', p: [['ig', 'The second strand lies beside the first.'], ['ig', 'The bases always pair in the same way: **A with T**, and **C with G**.', 'card']] },
+      { t: 11, still: 15.8, h: 'Bonds', p: [['ig', '**Bonds** between the pairs of bases hold the two strands together.', 'card'], ['ib', 'These are hydrogen bonds.'], ['bey', 'A and T have two bonds; C and G have three.']] },   /* IB A1.2.6 */
+      { t: 16, still: 22.6, h: 'A double helix', p: [['ig', 'The two strands are **coiled** together to form a **double helix**.', 'card']] }
     ],
     make: function () {
       var W = 560, H = 400, n = DNA_SEQ.length;
@@ -786,10 +789,10 @@
     aria: 'A solid food is ground with a pestle in a mortar, distilled water is added from a wash bottle and stirred, and the mixture is filtered: the filtrate passes through and the residue stays on the paper. Each test has its own labelled tube: the filtrate, the mixture, or for the ethanol test fresh food with no water.',
     M: [0, 6, 11, 17, 23.5],
     steps: [
-      { t: 0, still: 5.8, h: 'Grind the food', p: [['ig', 'Most foods are solid. Cut a small piece, then **grind** it with a **pestle and mortar**.']] },
-      { t: 6, still: 10.8, h: 'Add water', p: [['ig', 'Add a little **distilled water** from a wash bottle and stir. Substances that are soluble dissolve in the water.']] },
-      { t: 11, still: 16.8, h: 'Filter', p: [['ig', 'If solid pieces hide the colour of a test, **filter** the mixture. The liquid that passes through is the **filtrate**. The solid left on the filter paper is the **residue**.']] },
-      { t: 17, still: 23.2, h: 'Label the tubes', p: [['ig', 'Put each sample in its own **labelled test tube**. Use the **filtrate** for Benedict’s solution and DCPIP. Starch grains and many proteins stay in the residue, so use the **mixture** for iodine and biuret.'], ['ig', 'For the **ethanol** test, crush a fresh piece of food with **no water**: fats do not dissolve in water.']] }
+      { t: 0, still: 5.8, h: 'Grind the food', p: [['ig', 'Most foods are solid. Cut a small piece.'], ['ig', 'Then **grind** it with a **pestle and mortar**.', 'card']] },
+      { t: 6, still: 10.8, h: 'Add water', p: [['ig', 'Add a little **distilled water** from a wash bottle and stir.', 'card'], ['ig', 'Substances that are soluble dissolve in the water.']] },
+      { t: 11, still: 16.8, h: 'Filter', p: [['ig', 'If solid pieces hide the colour of a test, **filter** the mixture. The liquid that passes through is the **filtrate**. The solid left on the filter paper is the **residue**.', 'card']] },
+      { t: 17, still: 23.2, h: 'Label the tubes', p: [['ig', 'Put each sample in its own **labelled test tube**.'], ['ig', 'Use the **filtrate** for Benedict’s solution and DCPIP. Starch grains and many proteins stay in the residue, so use the **mixture** for iodine and biuret.', 'card'], ['ig', 'For the **ethanol** test, crush a fresh piece of food with **no water**: fats do not dissolve in water.', 'card']] }
     ],
     make: function () {
       var W = 560, H = 420, TY = 94, TH = 246, TW = 50;
@@ -917,8 +920,8 @@
     M: [0, 4, 10, 16],
     steps: [
       { t: 0, still: 3.7, h: 'Two tubes', p: [['ig', 'One tube holds the **food** in water. The other holds only **water**: this is the **control**.']] },
-      { t: 4, still: 9.8, h: 'Add iodine solution', p: [['ig', 'Add two or three drops of **iodine solution**, which is **orange-brown**, to each tube.']] },
-      { t: 10, still: 15.8, h: 'Observe the colour', p: [['ig', '**Blue-black** shows that **starch** is present. The control stays orange-brown.']] }
+      { t: 4, still: 9.8, h: 'Add iodine solution', p: [['ig', 'Add two or three drops of **iodine solution**, which is **orange-brown**, to each tube.', 'card']] },
+      { t: 10, still: 15.8, h: 'Observe the colour', p: [['ig', '**Blue-black** shows that **starch** is present.', 'card'], ['ig', 'The control stays orange-brown.']] }
     ],
     make: twoTubes(simple('iodine', 'cornflour', 'cornflour in water', C.iodine))
   }));
@@ -929,9 +932,9 @@
     M: [0, 4, 10, 18, 25],
     steps: [
       { t: 0, still: 3.7, h: 'Two tubes', p: [['ig', 'One tube holds the **food** in water. The other holds only **water**, the control.']] },
-      { t: 4, still: 9.8, h: 'Add Benedict’s solution', p: [['ig', 'Add **Benedict’s solution**, which is **blue**, to each tube. Nothing changes yet.']] },
-      { t: 10, still: 17.7, h: 'Heat in a water bath', p: [['ig', '**Heat** the tubes in a **hot water bath** for a few minutes. Never use a flame on the tube directly.']] },
-      { t: 18, still: 24.7, h: 'Observe the colour', p: [['ig', 'With a **reducing sugar**, the colour changes from blue to **green, yellow, orange or brick red**. A higher concentration of reducing sugar gives a colour further along this list. The control stays blue.']] }
+      { t: 4, still: 9.8, h: 'Add Benedict’s solution', p: [['ig', 'Add **Benedict’s solution**, which is **blue**, to each tube.', 'card'], ['ig', 'Nothing changes yet.']] },
+      { t: 10, still: 17.7, h: 'Heat in a water bath', p: [['ig', '**Heat** the tubes in a **hot water bath** for a few minutes.', 'card'], ['ig', 'Never use a flame on the tube directly.']] },
+      { t: 18, still: 24.7, h: 'Observe the colour', p: [['ig', 'With a **reducing sugar**, the colour changes from blue to **green, yellow, orange or brick red**. A higher concentration of reducing sugar gives a colour further along this list.', 'card'], ['ig', 'The control stays blue.']] }
     ],
     make: twoTubes({
       test: 'benedict', food: 'honey', foodName: 'honey in water', reagentCol: C.ben[0], addAt: 4,
@@ -962,8 +965,8 @@
     M: [0, 4, 10, 16],
     steps: [
       { t: 0, still: 3.7, h: 'Two tubes', p: [['ig', 'One tube holds the **food** in water. The other holds only **water**, the control.']] },
-      { t: 4, still: 9.8, h: 'Add biuret solution', p: [['ig', 'Add **biuret solution**, which is **blue**, to each tube and shake gently.']] },
-      { t: 10, still: 15.8, h: 'Observe the colour', p: [['ig', '**Purple** shows that **protein** is present. The control stays blue.']] }
+      { t: 4, still: 9.8, h: 'Add biuret solution', p: [['ig', 'Add **biuret solution**, which is **blue**, to each tube and shake gently.', 'card']] },
+      { t: 10, still: 15.8, h: 'Observe the colour', p: [['ig', '**Purple** shows that **protein** is present.', 'card'], ['ig', 'The control stays blue.']] }
     ],
     make: twoTubes(simple('biuret', 'gelatine', 'gelatine in water', C.biuret, true))
   }));
@@ -973,9 +976,9 @@
     aria: 'A food solution is added, one drop at a time, to blue DCPIP. With vitamin C the blue colour disappears. With water the DCPIP stays blue.',
     M: [0, 4, 10, 16],
     steps: [
-      { t: 0, still: 3.7, h: 'Blue DCPIP', p: [['ig', 'Put some **DCPIP solution**, which is **blue**, in two test tubes.']] },
-      { t: 4, still: 9.8, h: 'Add the food', p: [['ig', 'Add the **food solution**, **one drop at a time**, to one tube, and water to the other (the control).']] },
-      { t: 10, still: 15.8, h: 'Observe the colour', p: [['ig', 'The blue colour disappears: **vitamin C** is present. The liquid becomes **colourless**, or the pale colour of the food. The control stays blue.']] }
+      { t: 0, still: 3.7, h: 'Blue DCPIP', p: [['ig', 'Put some **DCPIP solution**, which is **blue**, in two test tubes.', 'card']] },
+      { t: 4, still: 9.8, h: 'Add the food', p: [['ig', 'Add the **food solution**, **one drop at a time**, to one tube, and water to the other (the control).', 'card']] },
+      { t: 10, still: 15.8, h: 'Observe the colour', p: [['ig', 'The blue colour disappears: **vitamin C** is present. The liquid becomes **colourless**, or the pale colour of the food.', 'card'], ['ig', 'The control stays blue.']] }
     ],
     make: twoTubes({
       test: 'dcpip', food: 'kiwi', reagentCol: '#B7D67A', reagentCol2: C.water, addAt: 4,
@@ -994,9 +997,9 @@
     steps: [
       { t: 0, still: 3.7, h: 'Two tubes', p: [['ig', 'One tube holds the **food**. The other holds only **water**, the control.']] },
       { t: 4, still: 8.8, h: 'Add ethanol', p: [['ig', 'Add **ethanol** to each tube. Keep ethanol away from flames.']] },
-      { t: 9, still: 13.8, h: 'Shake', p: [['ig', '**Shake** the tubes. Fats and oils dissolve in ethanol.']] },
-      { t: 14, still: 20.8, h: 'Pour into water', p: [['ig', 'Pour the liquid from each tube into a clean tube of **water**.']] },
-      { t: 21, still: 26.8, h: 'Observe the result', p: [['ig', 'A **cloudy white emulsion** shows that a **fat or oil** is present. The control stays clear.'], ['ib', 'Fats and oils do not dissolve in water, so they form tiny droplets.']] }
+      { t: 9, still: 13.8, h: 'Shake', p: [['ig', '**Shake** the tubes.', 'card'], ['ig', 'Fats and oils dissolve in ethanol.']] },
+      { t: 14, still: 20.8, h: 'Pour into water', p: [['ig', 'Pour the liquid from each tube into a clean tube of **water**.', 'card']] },
+      { t: 21, still: 26.8, h: 'Observe the result', p: [['ig', 'A **cloudy white emulsion** shows that a **fat or oil** is present.', 'card'], ['ig', 'The control stays clear.'], ['ib', 'Fats and oils do not dissolve in water, so they form tiny droplets.']] }
     ],
     make: (global.MolShapes.emulsion = function () {
       var W = 560, H = 420, X = [100, 216, 344, 460], Y = 128, TW = 56, TH = 196, TILT = 1.85;
