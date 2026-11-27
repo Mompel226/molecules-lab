@@ -17,21 +17,40 @@
   if (!Views || !D || !T || !MV || !S) return;
   var C = D.C, ease = D.ease, lerp = D.lerp, clamp = D.clamp, seg = D.seg, TAU = D.TAU;
 
-  /* drag sideways to turn; on a phone a finger that moves up or down still scrolls the page (touch-action: pan-y) */
+  /* drag sideways to turn; on a phone a finger that moves up or down still scrolls the page (touch-action: pan-y).
+     The drag never selects the names on the picture (Daniel, 27 Nov 2026: turning amylase, "the word amylase gets
+     highlighted partially at times"). The chip that says so stands inside the picture's lower left corner, light on the
+     dark ground, and its arrows move each time the picture can be turned, until the pupil has turned a model once
+     (Daniel, 27 Nov 2026: "the drag to turn is not very visible, so the students will miss it") */
+  var turnedOnce = false;
+  var TURN_ICON = '<svg class="memv__hint-i" viewBox="0 0 26 16" aria-hidden="true"><path d="M3.5 6.2C6 3.6 9.3 2.6 13 2.6s7 1 9.5 3.6"/><path d="M22.5 9.8C20 12.4 16.7 13.4 13 13.4S6 12.4 3.5 9.8"/><path class="memv__hint-h" d="M19.8 3.8l2.9 2.5-3.6 1.3M6.2 12.2L3.3 9.7l3.6-1.3"/></svg>';
   function dragTurn(V, on) {
     var el = V.el.querySelector('.mm__screen'); if (!el) return { enable: function () {} };
     var last = null, live = true;
-    el.addEventListener('pointerdown', function (e) { if (!live) return; last = [e.clientX, e.clientY]; try { el.setPointerCapture(e.pointerId); } catch (x) {} });
-    el.addEventListener('pointermove', function (e) { if (!last || !live) return; on((e.clientX - last[0]) * .012, (e.clientY - last[1]) * .012); last = [e.clientX, e.clientY]; V.paint(); });
+    el.addEventListener('pointerdown', function (e) {
+      if (!live) return;
+      if (e.pointerType === 'mouse') e.preventDefault();   /* a mouse drag would otherwise start a text selection */
+      last = [e.clientX, e.clientY]; try { el.setPointerCapture(e.pointerId); } catch (x) {}
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (!last || !live) return;
+      var dx = e.clientX - last[0], dy = e.clientY - last[1];
+      if (!turnedOnce && Math.abs(dx) + Math.abs(dy) > 2) { turnedOnce = true; document.documentElement.classList.add('mol-turned'); }
+      on(dx * .012, dy * .012); last = [e.clientX, e.clientY]; V.paint();
+    });
     ['pointerup', 'pointercancel'].forEach(function (n) { el.addEventListener(n, function () { last = null; }); });
-    var hint = document.createElement('span'); hint.className = 'memv__hint'; hint.textContent = 'Drag to turn'; hint.setAttribute('aria-hidden', 'true');
+    var hint = document.createElement('span'); hint.className = 'memv__hint'; hint.innerHTML = TURN_ICON + '<span>Drag to turn</span>'; hint.setAttribute('aria-hidden', 'true');
     el.parentNode.appendChild(hint);
     el.addEventListener('keydown', function (e) {
       if (live && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { on(e.key === 'ArrowLeft' ? -.2 : .2, 0); V.paint(); e.preventDefault(); }
     });
     /* a picture that cannot turn at this moment does not promise a drag */
     function enable(yes) {
+      var was = live;
       live = !!yes; last = null; hint.hidden = !live; el.classList.toggle('is-turnable', live);
+      /* the arrows move again each time the picture becomes one that turns */
+      if (live && !was) { hint.classList.remove('is-nudge'); void hint.offsetWidth; }
+      if (live) hint.classList.add('is-nudge');
       if (live) { el.setAttribute('tabindex', '0'); el.setAttribute('role', 'slider'); el.setAttribute('aria-label', 'Turn the model: use the left and right arrow keys'); }
       else { el.removeAttribute('tabindex'); el.removeAttribute('role'); el.removeAttribute('aria-label'); }
     }
@@ -53,16 +72,18 @@
   Views.add('atomsv', function (spec, ctx) {
     var W = 560, H = 400, mode = 'glucose', only = null, yaw = -.56, pitch = -.32, roll = 3.4;   /* at rest the ring faces the reader, as in the film */
     var MOD = { glucose: D.MODELS.glucose, fatty: D.MODELS.fatty, amino: D.MODELS.amino };
-    var FIT = { glucose: 45, fatty: 22, amino: 64 }, POSE = { glucose: [-.56, -.32, 3.4], fatty: [.22, .1, 0], amino: [0, -.18, 0] };
+    var FIT = { glucose: 45, fatty: 22, amino: 64 }, GROW = { glucose: 1.25, fatty: 1, amino: 1.25 }, POSE = { glucose: [-.56, -.32, 3.4], fatty: [.22, .1, 0], amino: [0, -.18, 0] };
     var NAME = { glucose: 'glucose, a carbohydrate', fatty: 'a fatty acid, part of a fat', amino: 'an amino acid, part of a protein' };
     var scene = {
       W: W, H: H, tick: function () {},
       draw: function (c) {
         D.frame(c, 0, 0, W, H, 16, function () {
           D.ground(c, 0, 0, W, H);
-          D.model(c, MOD[mode], W / 2, H / 2 + 18, FIT[mode], { yaw: yaw, pitch: pitch, roll: roll, only: only });
+          /* in a taller frame (scene.ext) the model grows as far as its width allows, and the title stays at the top */
+          var e = scene.ext || 0, z = 1 + (GROW[mode] - 1) * Math.min(1, e / 80);
+          D.model(c, MOD[mode], W / 2, H / 2 + 18, FIT[mode] * z, { yaw: yaw, pitch: pitch, roll: roll, only: only });
           /* the name is of the whole molecule, so it is a title and not a line to one atom */
-          c.fillStyle = '#EAF2F8'; c.font = '600 15px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(NAME[mode], W / 2, 20);
+          c.fillStyle = '#EAF2F8'; c.font = '600 15px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(NAME[mode], W / 2, 20 - e);
         });
       },
       labels: function () { return []; },
@@ -74,7 +95,7 @@
     };
     var V = MV({
       scene: scene, aria: 'A model of a molecule made of atoms. Press a molecule to change it, press an element to light its atoms, and drag to turn the model.',
-      barLabel: 'The molecule', buttons: [['glucose', 'Carbohydrate'], ['fatty', 'Fat'], ['amino', 'Protein']],
+      barLabel: 'The molecule', buttons: [['glucose', 'Carbohydrate'], ['fatty', 'Fat'], ['amino', 'Protein']], bands: '',
       read: [['c', 'Carbon:', 'atC', 'atoms'], ['h', 'Hydrogen:', 'atH', 'atoms'], ['o', 'Oxygen:', 'atO', 'atoms'], ['n', 'Nitrogen:', 'atN', 'atoms']],
       onButton: function (id) { set(id); ctx.pick(id === 'glucose' ? 'carb' : id === 'fatty' ? 'fat' : 'prot', { stay: true }); }
     });
@@ -96,6 +117,8 @@
     var WHERE = { glucose: 'dissolved in cytoplasm and blood', starch: 'a store in plant cells', glycogen: 'a store in liver and muscle cells', cellulose: 'the cell walls of plants' };
     /* Inside starch: an extension, opened only from Starch. Each state says its level and what IGCSE needs (Daniel, 24 Nov 2026) */
     var sub = null, was = null, sk = 1, spin = .18, iod = 1;
+    /* with iodine: the helix stands high and the spotting tile low, with room between them for "Drag to turn" */
+    var IY = 112;
     var LEVEL = {
       two: ['Beyond the syllabus:', 'two kinds of molecule. For IGCSE: starch is made from glucose'],
       amylose: ['IB Biology:', 'a coiled chain. For IGCSE: starch is made from glucose'],
@@ -123,10 +146,10 @@
       } else if (id === 'amylopectin') {
         S.drawPoly(c, P.amylopectin, P.amylopectin, 1, 0, 0); S.drawBox(c, S.polyBox(P.amylopectin), 1);
       } else {
-        S.drawAmylose(c, W / 2, 124, 1.16, spin, iod);
-        D.tile(c, 96, 244, 368, 146);
+        S.drawAmylose(c, W / 2, IY, 1.16, spin, iod);
+        D.tile(c, 96, 252, 368, 140);
         var turnK = ease(seg(iod, .62, 1));
-        well(c, 192, 298, C.iodine, 'iodine alone'); well(c, 368, 298, D.mixHex(C.iodine, C.blueBlack, turnK), 'with starch');
+        well(c, 192, 302, C.iodine, 'iodine alone'); well(c, 368, 302, D.mixHex(C.iodine, C.blueBlack, turnK), 'with starch');
       }
     }
     function subLabels(id) {
@@ -135,8 +158,8 @@
       if (id === 'amylopectin') { var q = S.polyBox(P.amylopectin); return [{ id: 'b', text: 'amylopectin: a chain with branches', x: q.cx, y: q.y, side: 'T' }]; }
       if (iod < 1) return [];
       /* the name's line ends on the iodine atom with the fewest rings above it */
-      var R = [], best = null; for (var i = 0; i < S.AMY.n; i++) R.push(S.amyAt(i, spin, W / 2, 124, 1.16));
-      S.iodineAtoms(1, W / 2, 124, 1.16).forEach(function (t) {
+      var R = [], best = null; for (var i = 0; i < S.AMY.n; i++) R.push(S.amyAt(i, spin, W / 2, IY, 1.16));
+      S.iodineAtoms(1, W / 2, IY, 1.16).forEach(function (t) {
         var over = R.filter(function (o) { return o.z > t.z && o.y < t.y && Math.abs(o.x - t.x) < S.AMY.r * 1.16 + 2; }).length;
         if (!best || over < best.over) best = { over: over, x: t.x, y: t.y };
       });
@@ -167,7 +190,9 @@
         var b = S.polyBox(LAY[cur]);
         return [{ id: cur, text: cur, x: b.cx, y: b.y, side: 'T' }];
       },
-      read: function (pill) { if (sub) pill('w', LEVEL[sub][1], 'ext', LEVEL[sub][0]); else pill('w', WHERE[cur], '', 'Where:'); }
+      read: function (pill) { if (sub) pill('w', LEVEL[sub][1], 'ext', LEVEL[sub][0]); else pill('w', WHERE[cur], '', 'Where:'); },
+      /* with iodine, the spotting tile fills the lower part: "Drag to turn" stands above it, beside the helix */
+      hintY: function () { return sub === 'iodine' ? 254 : null; }
     };
     var ONE = 'one glucose molecule', LINK = 'link between two glucose molecules', CROSS = 'links between the chains', IOD = 'iodine atom';
     var V = MV({
@@ -277,7 +302,7 @@
     };
     var V = MV({
       scene: scene, aria: 'One fat molecule made of glycerol and three fatty acids; many molecules of a fat packed closely; many molecules of an oil moving past each other.',
-      barLabel: 'What to show', buttons: [['one', 'One molecule'], ['fat', 'A fat'], ['oil', 'An oil'], ['wax', 'A wax (IB)', 'memv__btn--ext']], read: [['s', 'Shown:']],
+      barLabel: 'What to show', buttons: [['one', 'One molecule'], ['fat', 'A fat'], ['oil', 'An oil'], ['wax', 'A wax (IB)', 'memv__btn--ext']], read: [['s', 'Shown:']], bands: 'T',
       key: { all: [['glycerol', 'glycerol'], ['fatty', 'fatty acid'], ['fatty', 'long chain of a wax molecule'], ['atO', 'where the two long chains join']],
              sets: [['glycerol', 'fatty acid'], ['long chain of a wax molecule', 'where the two long chains join']],
              now: function () { return mode === 'wax' ? ['long chain of a wax molecule', 'where the two long chains join'] : ['glycerol', 'fatty acid']; } },
@@ -302,10 +327,14 @@
     var R = D.rng(9), FREE = [[], []];
     for (var i = 0; i < n; i++) FREE[0].push([38 + R() * (W - 76), 34 + R() * (H - 68)]);
     for (var i2 = 0; i2 < n; i2++) FREE[1].push([38 + R() * (W - 76), H * .58 + R() * (H * .42 - 30)]);   /* below the first protein, which waits higher up */
+    /* the separate amino acids spread over the whole height of a taller frame (scene.ext), in the same order */
+    function freeOf(k) { var e = scene.ext || 0; return FREE[k].map(function (a) { return [a[0], H / 2 + (a[1] - H / 2) * (H + 2 * e) / H]; }); }
     var KA = 'an amino acid (each colour is one kind)', KE = 'an end of the chain', KC = 'the folded chain, drawn as a smooth shape';
     function F() { return seq === 1 ? S.FOLD1 : S.FOLD2; }
     function kinds() { return seq === 1 ? S.KINDS1 : S.KINDS2; }
-    function realBox() { return S.realBox(W / 2, H / 2 + 6, 36, view); }
+    /* the real protein grows a little in a taller frame (scene.ext) */
+    function realS() { return 36 * (1 + .2 * Math.min(1, (scene.ext || 0) / 80)); }
+    function realBox() { return S.realBox(W / 2, H / 2 + 6, realS(), view); }
     /* the steps still to run, each with its own time (s) */
     var DUR = { appear: .5, join: 2.2, fold: 2.2, unfold: 1.4, grow: 3.4 };
     function run(list) { queue = V.isStill() ? [] : list.slice(); if (V.isStill()) list.forEach(finish); }
@@ -325,12 +354,12 @@
       draw: function (c) {
         D.frame(c, 0, 0, W, H, 16, function () {
           D.ground(c, 0, 0, W, H);
-          if (st === 'real') { S.drawRealProtein(c, W / 2, H / 2 + 6, 36, view, ease(surf), grow); if (grow >= 1) S.drawBox(c, realBox(), 1); return; }
+          if (st === 'real') { S.drawRealProtein(c, W / 2, H / 2 + 6, realS(), view, ease(surf), grow); if (grow >= 1) S.drawBox(c, realBox(), 1); return; }
           /* the chain's places: a gentle wave, folding into its 3D shape; each amino acid moves into its place in turn */
           /* another sequence: the first protein waits higher up, the new chain forms below it, and both end side by side */
           var two = seq === 2, fe = ease(fold), cx = two ? lerp(W / 2, W * .73, fe) : W / 2, cy = two ? lerp(H - 104, H / 2, fe) : H / 2;
           if (two) S.drawChain3(c, S.inside(S.project(S.chain3At(S.FOLD1, n, 1), view, W * .27, lerp(H * .3, H / 2, fe), step), W, H, r + 6), S.KINDS1, r, null, null, step, true);
-          var line = S.inside(S.project(S.chain3At(F(), n, fe), fold > 0 ? view : FLAT, cx, cy, step), W, H, r + 6), from = FREE[seq - 1], done = 0;
+          var line = S.inside(S.project(S.chain3At(F(), n, fe), fold > 0 ? view : FLAT, cx, cy, step), W, H, r + 6), from = freeOf(seq - 1), done = 0;
           var Q = line.map(function (p, j) {
             var a = from[j], tj = j / n * .72, kk = ease(seg(join, tj, tj + .28)), w = 1 - kk;
             if (kk >= 1 && done === j) done = j + 1;
@@ -341,7 +370,7 @@
       },
       labels: function () {
         if (st === 'real') { if (grow < 1) return []; var b = realBox(); return [{ id: 'r', text: surf > .5 ? 'amylase as a smooth shape' : 'amylase', x: b.cx, y: b.y, side: 'T' }]; }
-        if (join <= 0 && appear >= 1) return [{ id: 'a', text: 'one amino acid', x: FREE[seq - 1][4][0], y: FREE[seq - 1][4][1] - 7, side: 'T' }];
+        if (join <= 0 && appear >= 1) { var a4 = freeOf(seq - 1)[4]; return [{ id: 'a', text: 'one amino acid', x: a4[0], y: a4[1] - 7, side: 'T' }]; }
         return [];
       },
       read: function (pill) {
@@ -354,7 +383,7 @@
     };
     var V = MV({
       scene: scene, aria: 'Amino acids of different kinds join, one after another, in a chain, which folds into a 3D shape. Amino acids in another order join and fold into another shape. A real protein, amylase, is built up one amino acid after another, and shown as its folded chain or as one smooth shape, which is the same folded chain.',
-      barLabel: 'What to show', buttons: [['free', 'Amino acids'], ['chain', 'A chain'], ['fold', 'Folded'], ['other', 'Another sequence']], read: [['s', 'Shown:']], liveNames: true,
+      barLabel: 'What to show', buttons: [['free', 'Amino acids'], ['chain', 'A chain'], ['fold', 'Folded'], ['other', 'Another sequence']], read: [['s', 'Shown:']], liveNames: true, bands: 'T',
       key: { all: [['amino', KA], ['chainEnd', KE], ['protSurf', KC]], sets: [[KA, KE], [KA], [KC]], now: function () { return st === 'real' ? (surf > .5 ? [KC] : [KA]) : join >= 1 ? [KA, KE] : [KA]; } },
       onButton: function (id) { set(id); ctx.pick(id === 'free' ? 'aa' : id === 'other' ? 'order' : id, { stay: true }); }
     });
@@ -502,7 +531,7 @@
     };
     var V = MV({
       scene: scene, aria: 'A spotting tile with four foods and iodine solution; and five tubes of Benedict’s solution, before and after heating.',
-      barLabel: 'The test', buttons: [['iodine', 'Iodine test'], ['ben', 'Benedict’s test'], ['act', 'Add iodine solution', 'memv__btn--go'], ['clear', 'Start again']], read: [['s', 'Shown:']],
+      barLabel: 'The test', buttons: [['iodine', 'Iodine test'], ['ben', 'Benedict’s test'], ['act', 'Add iodine solution', 'memv__btn--go'], ['clear', 'Start again']], read: [['s', 'Shown:']], bands: '',
       onButton: function (id) {
         if (id === 'iodine' || id === 'ben') { set(id); ctx.pick(id === 'ben' ? 'benedict' : 'iodine', { stay: true }); }
         else if (id === 'act') { on = true; if (V.isStill()) k = 1; sync(); }
@@ -554,7 +583,7 @@
     };
     var V = MV({
       scene: scene, aria: 'Two test tubes, a food and water as a control. Press to carry out the biuret test, the ethanol emulsion test or the DCPIP test.',
-      barLabel: 'The test', buttons: [['biuret', 'Biuret'], ['emulsion', 'Ethanol emulsion'], ['dcpip', 'DCPIP'], ['act', 'Add', 'memv__btn--go'], ['clear', 'Start again']], read: [['s', 'Shown:']], liveNames: true,
+      barLabel: 'The test', buttons: [['biuret', 'Biuret'], ['emulsion', 'Ethanol emulsion'], ['dcpip', 'DCPIP'], ['act', 'Add', 'memv__btn--go'], ['clear', 'Start again']], read: [['s', 'Shown:']], liveNames: true, bands: 'T',
       onButton: function (id) {
         if (CASE[id]) { set(id); ctx.pick(id, { stay: true }); }
         else if (id === 'act') { on = true; if (V.isStill()) k = 1; sync(); }

@@ -21,9 +21,14 @@
   /* The picture takes the whole width of its column, and its names stand in a band above it and a band below it, each
      joined to its part by one upright line that ends ON the part (Daniel, 5 Nov 2026: "put it at the top if you need it").
      Upright lines at different places cannot cross. On a phone each name is a numbered pin, with the words in a key. */
-  function frame(svg, bg, W, H, D, narrow, px) {
+  /* `sides` names the bands a picture ever uses ('TB', 'T', 'B' or ''): a band no name of the picture uses is not kept
+     empty (Daniel, 27 Nov 2026: "most of the space is taken by the display"). `ext`: the picture's frame reaches this many
+     model units above and below the scene, into the spare height of its column (MolDraw.outset) */
+  function frame(svg, bg, W, H, D, narrow, px, sides, ext) {
+    sides = sides == null ? 'TB' : sides; ext = ext || 0;
     var f = px * (W + 4) / D, band = narrow ? f * 1.7 : f * 2.95 + 3;
-    var vb = { x: -2, y: -band, w: W + 4, h: H + 2 * band, bw: W, bh: H };
+    var bT = sides.indexOf('T') >= 0 ? band : 2, bB = sides.indexOf('B') >= 0 ? band : 2;
+    var vb = { x: -2, y: -bT - ext, w: W + 4, h: H + 2 * ext + bT + bB, bw: W, bh: H, ext: ext, bT: bT, bB: bB };
     svg.setAttribute('viewBox', K.n1(vb.x) + ' ' + K.n1(vb.y) + ' ' + K.n1(vb.w) + ' ' + K.n1(vb.h));
     bg.setAttribute('x', vb.x); bg.setAttribute('y', vb.y); bg.setAttribute('width', vb.w); bg.setAttribute('height', vb.h);
     return { f: f, vb: vb, narrow: narrow, to: function (x, y) { return [x, y]; } };
@@ -40,7 +45,7 @@
     return t;
   }
   function putNames(lay, items, narrow, key) {
-    var vb = lay.vb, o = { items: items, left: -2, right: vb.bw + 2, font: lay.f, top: vb.y + 4, bottom: vb.y + vb.h - 4, bandT: -3, bandB: vb.bh + 3, bandL: 2, bandR: vb.bw - 2 };
+    var vb = lay.vb, e = vb.ext || 0, o = { items: items, left: -2, right: vb.bw + 2, font: lay.f, top: vb.y + 4, bottom: vb.y + vb.h - 4, bandT: -3 - e, bandB: vb.bh + e + 3, bandL: 2, bandR: vb.bw - 2 };
     if (narrow) {
       var P = L.pinLabels(Object.assign({}, o, { gap: 4 }));
       if (key) { key.hidden = !P.order.length; key.innerHTML = P.order.map(function (q) { return '<li><b>' + q.n + '</b> ' + L.esc(q.text) + '</li>'; }).join(''); }
@@ -125,6 +130,7 @@
 
   /* ---------- a station's left picture ----------
      o = { scene, cls?, buttons?: [[id, label]], say(state)?, read?: [[key, label, icon?, words behind the icon?]], cL, cR,
+         bands?: the name bands the picture ever uses, 'TB' (the default), 'T', 'B' or '' (scene.ext: how far its frame grows),
          key?: { all: [[kind, name], …], sets: [[name, …], …] (what each state shows), now() (the names shown now) } }
      returns { el, setButtons(id), repaint(), labels(), stage: ... } for a view to wrap in Views.add */
   function MolView(o) {
@@ -164,7 +170,8 @@
       el.className = 'memv__pill' + (tone ? ' is-' + tone : '');
     }
     var pk = h('ol', 'pinkey'); pk.hidden = true; root.appendChild(pk);
-    var stage = attach(svg), lay = null, narrow = false, lastKey = '', running = false, raf = null, tsLast = null, scene = o.scene;
+    var stage = attach(svg), lay = null, narrow = false, lastKey = '', running = false, raf = null, tsLast = null, scene = o.scene, sides = o.bands == null ? 'TB' : o.bands;
+    scene.ext = 0;
     var namesT = 0, pinW = 0, pinMax = 0;
 
     function showKey(names) {
@@ -191,14 +198,34 @@
       /* every row of buttons counts: the Elements picture has two */
       var rows = 0; Array.prototype.forEach.call(root.children, function (x) { if (x.classList.contains('memv__bar') && !x.hidden) rows += x.offsetHeight + gap; });
       var room = H0 - pad - rows - (keyEl ? keyEl.offsetHeight + gap : 0) - (o.read ? read.offsetHeight + gap : 0) - (pk.hidden ? 0 : pk.offsetHeight + gap);
-      lay = frame(svg, bg, scene.W, scene.H, rw, narrow, 14);
+      lay = frame(svg, bg, scene.W, scene.H, rw, narrow, 14, sides, 0);
       var want = rw * lay.vb.h / lay.vb.w;
       /* on a phone the picture scrolls with the page, whatever its height; in a column it fits the room there is */
-      var fits = (global.matchMedia && global.matchMedia('(max-width: 1000px)').matches) || room < 120 ? want : Math.min(room, want);
+      var phone = (global.matchMedia && global.matchMedia('(max-width: 1000px)').matches) || room < 120;
+      /* a column taller than the picture: the picture's frame grows above and below into that height, never past a square
+         (Daniel, 27 Nov 2026: "most of the space is taken by the display") */
+      if (!phone && room > want + 1) {
+        var ext = Math.min((room - want) * lay.vb.w / rw / 2, Math.max(0, (scene.W - scene.H) / 2));
+        if (ext > 1) { lay = frame(svg, bg, scene.W, scene.H, rw, narrow, 14, sides, ext); want = rw * lay.vb.h / lay.vb.w; }
+      }
+      var fits = phone ? want : Math.min(room, want);
       fig.style.height = Math.round(fits) + 'px';
       /* a picture limited by the height of its column: the names keep their size on the screen all the same */
-      if (fits < want - 1) lay = frame(svg, bg, scene.W, scene.H, fits * lay.vb.w / lay.vb.h, narrow, 14);
+      if (fits < want - 1) lay = frame(svg, bg, scene.W, scene.H, fits * lay.vb.w / lay.vb.h, narrow, 14, sides, lay.vb.ext);
+      scene.ext = lay.vb.ext;
       return true;
+    }
+    /* where the frame's corners are on the screen, for what stands inside them (the "Drag to turn" chip, the i). A scene
+       whose drawing fills the lower left corner in one state gives scene.hintY(): the chip then stands with its foot there */
+    var cornersWas = '';
+    function corners() {
+      var fw = fig.clientWidth, fh = fig.clientHeight; if (!fw || !fh || !lay) return;
+      var vb = lay.vb, s = Math.min(fw / vb.w, fh / vb.h), sx = (fw - vb.w * s) / 2, sy = (fh - vb.h * s) / 2;
+      var hy = scene.hintY ? scene.hintY() : null, hb = hy == null ? sy + vb.bB * s : sy + (vb.y + vb.h - hy) * s;
+      var v = [Math.round(sx + 2 * s), Math.round(sy + vb.bB * s), Math.round(hb)].join(' ');
+      if (v === cornersWas) return; cornersWas = v; v = v.split(' ');
+      fig.style.setProperty('--fl', v[0] + 'px'); fig.style.setProperty('--fr', v[0] + 'px');
+      fig.style.setProperty('--fb', v[1] + 'px'); fig.style.setProperty('--hb', v[2] + 'px');
     }
     function names() {
       if (!lay) return;
@@ -219,7 +246,9 @@
       var was = lastKey;
       if (keyEl) showKey(o.key.now());
       if (!layout()) return;
-      var c = stage.begin(); if (c) scene.draw(c, lay);
+      corners();
+      var c = stage.begin(), Dw = global.MolDraw;
+      if (c) { if (Dw) Dw.outset(scene.W, scene.H, lay.vb.ext); try { scene.draw(c, lay); } finally { if (Dw) Dw.outset(); } }
       if (scene.read) scene.read(pill);
       if (was && lastKey !== was) names();   /* the picture changed size: its names follow it */
     }

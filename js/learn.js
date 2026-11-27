@@ -18,7 +18,7 @@
 
   /* ---------- video: a lesson clip, on demand ---------- */
   function video(spec) {
-    var f = h('figure', 'media media--video');
+    var f = h('figure', 'media media--video' + (spec.wide ? ' media--wide' : ''));   /* wide: a strip of cells, not a square film */
     var v = document.createElement('video');
     v.className = 'media__el';
     v.src = 'assets/video/' + spec.src + '.mp4';
@@ -459,7 +459,34 @@
     return { mount: mount, detach: function () { clearInterval(tick); detach(); }, staged: column, shown: function () { return STAGE.holding(claim); } };
   }
 
-  var MAKERS = [['video', video], ['watch', watch], ['curio', curio], ['labelphoto', labelphoto], ['figure', figure]];
+  /* ---------- the Grey CAT: his slides' cat, and its letters joined in their base pairs ----------
+     Daniel, 27 Nov 2026: "the G and the C … the first two letters always go together … and cat, A, the last two
+     letters, A and T, go together … So you need to somehow visualize that". Each letter wears its base's colour in the
+     helix (the Inheritance Lab's colours); a bracket of bonds joins each pair, and its words say which */
+  function greycat(spec) {
+    var f = h('figure', 'media gcat');
+    var pic = h('div', 'gcat__pic'), im = new Image();
+    im.src = 'assets/photos/' + spec.img; im.alt = 'A grey cat lying down: the Grey CAT of the lesson slides'; im.className = 'gcat__img';
+    var wh = (global.PHOTO_SIZE || {})[spec.img]; if (wh) { im.width = wh[0]; im.height = wh[1]; }
+    pic.appendChild(im); f.appendChild(pic);
+    var T = [['G', 8], ['C', 152], ['A', 204], ['T', 256]], tile = function (q) {
+      return '<rect class="gcat__t gcat__t--' + q[0] + '" x="' + q[1] + '" y="10" width="46" height="58" rx="8"/><text class="gcat__l" x="' + (q[1] + 23) + '" y="40">' + q[0] + '</text>';
+    };
+    /* a pair's bracket: a stem down from each letter, joined by the dashed line of the bonds, its words under it */
+    var pair = function (a, b, y, words) {
+      var x1 = a[1] + 23, x2 = b[1] + 23;
+      return '<path class="gcat__stem gcat__stem--' + a[0] + '" d="M' + x1 + ' 72V' + y + '"/><path class="gcat__stem gcat__stem--' + b[0] + '" d="M' + x2 + ' 72V' + y + '"/>' +
+        '<path class="gcat__bond" d="M' + x1 + ' ' + y + 'H' + x2 + '"/><text class="gcat__w" x="' + (x1 + x2) / 2 + '" y="' + (y + 24) + '">' + words + '</text>';
+    };
+    var svg = '<svg class="gcat__svg" viewBox="0 0 312 140" role="img" aria-label="The words Grey CAT. G, the first letter, is joined to C, the first letter of CAT: G with C. A and T, the last two letters, are joined: A with T.">' +
+      T.map(tile).join('') + '<text class="gcat__rest" x="60" y="40">rey</text>' +
+      pair(T[0], T[1], 98, 'G with C') + pair(T[2], T[3], 98, 'A with T') + '</svg>';
+    f.appendChild(h('div', 'gcat__word', svg));
+    f.appendChild(h('figcaption', 'media__cap', mk(spec.cap || '') + (spec.credit ? ' <span class="media__credit">' + esc(spec.credit) + '</span>' : '')));
+    return f;
+  }
+
+  var MAKERS = [['video', video], ['watch', watch], ['curio', curio], ['labelphoto', labelphoto], ['figure', figure], ['greycat', greycat]];
   global.CircLearn = { add: function (name, fn) { MAKERS.push([name, fn]); W.register(name, fn); }, diagram: function (name, fn) { DIAGRAMS[name] = fn; },
                        h: h, esc: esc, mk: mk, head: head, svgEl: svgEl, stage: stage,
                        holdPlate: STAGE.hold, releasePlate: STAGE.release, dropPlateHold: STAGE.dropHold };

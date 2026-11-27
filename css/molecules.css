@@ -370,7 +370,7 @@ p,li,dd,figcaption{text-wrap:pretty}
 .memv__btn--ext:hover,.memv__btn--ext[aria-pressed="true"]{border-color:var(--ext);background:var(--ext-tint);color:var(--ext)}
 .memv__fig{position:relative;flex:none;min-height:0;margin:0;display:flex;width:100%}
 /* the caption and the credit of a rich picture, one press away under a small i, so the picture has the column */
-.pinfo{position:absolute;z-index:5;right:6px;bottom:6px;color:#EAF2F8}
+.pinfo{position:absolute;z-index:5;right:calc(var(--fr,0px) + 8px);bottom:calc(var(--fb,0px) + 8px);color:#EAF2F8}
 .pinfo summary{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:rgba(10,18,26,.8);border:1.5px solid rgba(255,255,255,.42);cursor:pointer;list-style:none}
 .pinfo summary::-webkit-details-marker{display:none}
 .pinfo summary span::before{content:'i';font:italic 700 15px/1 Georgia,'Times New Roman',serif}
@@ -380,8 +380,22 @@ p,li,dd,figcaption{text-wrap:pretty}
 .pinfo__t{position:absolute;right:0;bottom:32px;width:min(330px,calc(100vw - 40px));margin:0;padding:9px 12px;border-radius:10px;background:rgba(10,18,26,.95);border:1px solid rgba(255,255,255,.2);text-align:left}
 .pinfo__say{display:block;font-size:13px;font-weight:600;line-height:1.35;color:#EAF2F8}
 .pinfo__credit{display:block;margin-top:3px;font-size:11.5px;line-height:1.35;color:#B9C7D3}
-/* what a turnable model does, on the model and not on a line of its own */
-.memv__hint{position:absolute;left:8px;bottom:9px;z-index:4;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600;color:#EAF2F8;background:rgba(10,18,26,.72);pointer-events:none}
+/* what a turnable model does, on the model and not on a line of its own: a light chip in the frame's lower left corner,
+   whose arrows move each time the picture can be turned, until the pupil has turned a model (Daniel, 27 Nov 2026: "the
+   drag to turn is not very visible, so the students will miss it") */
+.memv__hint{position:absolute;left:calc(var(--fl,0px) + 10px);bottom:calc(var(--hb,var(--fb,0px)) + 10px);z-index:4;display:flex;align-items:center;gap:7px;
+  padding:5px 13px 5px 9px;border-radius:999px;font-size:13.5px;font-weight:700;line-height:1.2;color:#10202E;background:#FFFFFF;
+  box-shadow:0 0 0 3px rgba(255,255,255,.22),0 3px 10px rgba(0,0,0,.4);pointer-events:none}
+.memv__hint[hidden]{display:none}
+.memv__hint-i{width:26px;height:16px;flex:none;fill:none;stroke:#0E7C66;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+@keyframes memv-nudge{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@keyframes memv-glow{0%,100%{box-shadow:0 0 0 3px rgba(255,255,255,.22),0 3px 10px rgba(0,0,0,.4)}50%{box-shadow:0 0 0 7px rgba(255,255,255,.3),0 3px 10px rgba(0,0,0,.4)}}
+.memv__hint.is-nudge .memv__hint-i{animation:memv-nudge 1s ease-in-out 4}
+.memv__hint.is-nudge{animation:memv-glow 1s ease-in-out 4}
+.mol-turned .memv__hint.is-nudge,.mol-turned .memv__hint.is-nudge .memv__hint-i{animation:none}
+@media (prefers-reduced-motion:reduce){ .memv__hint.is-nudge,.memv__hint.is-nudge .memv__hint-i{animation:none} }
+/* a drag on a picture turns it and never selects its names (Daniel, 27 Nov 2026: "the word amylase gets highlighted") */
+.mm__screen{-webkit-user-select:none;user-select:none}
 .memv__read{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 /* a sample of each particle in an animation's key, on the dark ground of the pictures */
 .anikey__sw{background:#10263A;border-radius:4px}
@@ -395,6 +409,10 @@ p,li,dd,figcaption{text-wrap:pretty}
   .exam-list li.xcard .media--video{display:grid;grid-template-columns:minmax(0,55%) minmax(0,1fr);background:var(--card)}
   .exam-list li.xcard .media--video .media__el{max-height:none;aspect-ratio:1/1;align-self:center}
   .exam-list li.xcard .media--video .media__cap{border-top:0;border-left:1px solid var(--edge-2);align-content:center}
+  /* a wide film (a strip of cells) stands over its caption, at its own shape */
+  .exam-list li.xcard .media--video.media--wide{display:block}
+  .exam-list li.xcard .media--video.media--wide .media__el{aspect-ratio:auto}
+  .exam-list li.xcard .media--video.media--wide .media__cap{border-left:0;border-top:1px solid var(--edge-2)}
 }
 /* the plant that wilts (station 7) */
 .mf-plant__wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
@@ -411,6 +429,20 @@ p,li,dd,figcaption{text-wrap:pretty}
 .ak__b--C{background:var(--gene);color:var(--pt-lt-dark)}
 .memv__bar--2{flex:none;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 .memv__btn--el{padding:4px 10px;font-size:12.5px}
+/* the Grey CAT (station 5): the cat of the lesson slides beside its letters, joined in their base pairs */
+.gcat{display:grid;grid-template-columns:minmax(0,46%) minmax(0,1fr);align-items:center;gap:6px 14px;padding:12px;border:1px solid var(--edge-2);border-radius:12px;background:var(--card)}
+.gcat__pic{background:#FFFFFF;border-radius:10px;padding:8px}
+.gcat__img{display:block;width:100%;height:auto;aspect-ratio:612/275}
+.gcat__svg{display:block;width:100%;height:auto;max-width:340px;margin:0 auto}
+.gcat__t--G{fill:var(--aa3)} .gcat__t--C{fill:var(--gene)} .gcat__t--A{fill:var(--dna-a)} .gcat__t--T{fill:var(--dna-b)}
+.gcat__l{font:800 34px var(--font);fill:var(--pt-lt-dark);text-anchor:middle;dominant-baseline:central}
+.gcat__rest{font:700 34px var(--font);fill:var(--ink);dominant-baseline:central}
+.gcat__stem{stroke-width:4;stroke-linecap:round}
+.gcat__stem--G{stroke:var(--aa3)} .gcat__stem--C{stroke:var(--gene)} .gcat__stem--A{stroke:var(--dna-a)} .gcat__stem--T{stroke:var(--dna-b)}
+.gcat__bond{stroke:var(--ink);stroke-width:2.5;stroke-dasharray:5 4}
+.gcat__w{font:700 15px var(--font);fill:var(--ink);text-anchor:middle}
+.gcat .media__cap{grid-column:1 / -1;border-top:1px solid var(--edge-2);padding-top:8px}
+@media (max-width:520px){ .gcat{grid-template-columns:minmax(0,1fr)} }
 .memv__btn--go{background:var(--accent);border-color:var(--accent);color:var(--on-ink,#fff)}
 .memv__btn--go:hover:not([disabled]){background:var(--accent-2);border-color:var(--accent-2)}
 .memv__btn--go[disabled]{background:var(--card-2);color:var(--grey);border-color:var(--edge)}

@@ -63,12 +63,20 @@
     if (c.roundRect) c.roundRect(x, y, w, h, r);
     else { c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
   }
+  /* A station's left picture takes the spare height of its column (Daniel, 27 Nov 2026: "most of the space is taken by the
+     display"): MolView sets `outset` while a scene draws, and the scene's whole frame and ground (0, 0, W, H) then reach
+     `e` model units above and below it. The drawing itself keeps its place, in the middle. */
+  var OUT = null;
+  function outset(w, h, e) { OUT = e > 0 ? { w: w, h: h, e: e } : null; }
+  function grown(x, y, w, h) { return OUT && x === 0 && y === 0 && w === OUT.w && h === OUT.h ? OUT.e : 0; }
   function ground(c, x, y, w, h, top, bottom) {
+    var e = grown(x, y, w, h); y -= e; h += 2 * e;
     var lg = c.createLinearGradient(0, y, 0, y + h);
     lg.addColorStop(0, top || C.air1); lg.addColorStop(1, bottom || C.air0);
     c.fillStyle = lg; c.fillRect(x, y, w, h);
   }
   function frame(c, x, y, w, h, r, paint) {
+    var e = grown(x, y, w, h); y -= e; h += 2 * e;
     c.save(); rr(c, x, y, w, h, r); c.clip(); paint(); c.restore();
     c.save(); rr(c, x, y, w, h, r); c.strokeStyle = C.edge; c.lineWidth = 1.2; c.stroke(); c.restore();
   }
@@ -555,7 +563,7 @@
 
   global.MolDraw = {
     C: C, AA: AA, TAU: TAU, lerp: lerp, clamp: clamp, ease: ease, seg: seg, mixHex: mixHex, rgba: rgba, rng: rng,
-    ball: ball, rr: rr, ground: ground, frame: frame, arrow: arrow,
+    ball: ball, rr: rr, ground: ground, frame: frame, outset: outset, arrow: arrow,
     MODELS: MODELS, formula: formula, model: model, turn: turn,
     glc: glc, ringAt: ringAt, joinPoints: joinPoints, joinLink: joinLink, tailPts: tailPts, tail: tail, glycerolBar: glycerolBar, bead: bead,
     textSize: textSize, helix: helix, dnaGeom: dnaGeom, PAIR: PAIR, baseCol: baseCol, tile: tile, setLight: setLight,

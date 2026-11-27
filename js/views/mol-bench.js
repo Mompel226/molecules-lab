@@ -114,7 +114,7 @@
     };
     var V = MV({
       scene: scene, aria: 'A test tube on a rack with the chosen food. Press the buttons to carry out the chosen food test.',
-      barLabel: 'Carry out the test', buttons: [['act', 'Add', 'memv__btn--go'], ['read', 'Record the result'], ['new', 'New tube']], read: [['t', 'Test:']],
+      barLabel: 'Carry out the test', buttons: [['act', 'Add', 'memv__btn--go'], ['read', 'Record the result'], ['new', 'New tube']], read: [['t', 'Test:']], bands: '',
       onButton: function (id) {
         if (id === 'act') { B.act(V.isStill()); V.paint(); }
         else if (id === 'read') B.read();
