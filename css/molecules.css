@@ -90,13 +90,6 @@
 .said__name{display:block;font-size:14px;font-weight:600;color:var(--col-ink)}
 .said__credit{display:block;font-size:11.5px;color:var(--col-soft);margin-top:2px}
 /* a picture of several photographs: its credits folded under it (Daniel, 4 Nov 2026), open upwards into the picture's space */
-.said__fold{margin-top:3px;font-size:12.5px;color:var(--col-soft)}
-.said__fold summary{display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:2px 8px;border-radius:6px;list-style:none}
-.said__fold summary::-webkit-details-marker{display:none}
-.said__fold summary::before{content:'\25B8';font-size:11px}
-.said__fold[open] summary::before{content:'\25BE'}
-.said__fold summary:hover{color:var(--col-ink)}
-.said__fold summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .said__list{margin:4px auto 0;padding:0;list-style:none;text-align:left;display:inline-block;max-width:100%;line-height:1.45}
 .said__list b{color:var(--col-ink);font-weight:600}
 .sim{flex:1;min-height:0;overflow:auto;padding:12px 14px 16px;display:flex;flex-direction:column}
@@ -503,3 +496,41 @@ p,li,dd,figcaption{text-wrap:pretty}
 .bn__t td{padding:3px 5px;text-align:center}
 .bn__c{display:inline-block;width:22px;height:16px;border-radius:4px;border:1px dashed var(--edge);vertical-align:middle}
 .bn__c.is-on{border:1px solid rgba(0,0,0,.35)}
+
+/* ---------- the picture is the priority (Daniel, 27 Nov 2026, of every animation in every lab) ----------
+   "I still believe that animation is too small and there's too much text that impedes the visualization. Text should be on
+   the right ... the animation is the priority, and it's okay to make the keys maybe smaller so that they fit ... And this is
+   true for every single animation everywhere." The Membrane Lab's pattern (membrane-lab 12126b1), with this lab's own shape:
+   its models and films are about 1.3 wide to 1 high and grow with the column's width until they meet its height, so on a
+   laptop the column is as wide as such a picture can stand in the window's height, and the words keep at least 600 px.
+   The empty tool row takes no line, the buttons, key and counters are smaller, and a film may use the column's height. */
+@media (min-width:1001px){
+  .stage{--colw:clamp(42vw, calc((100dvh - 250px) * 1.3 + 24px), calc(100vw - 600px));grid-template-columns:minmax(360px,var(--colw)) minmax(0,1fr)}
+  /* the tool row takes no line while it holds no button (its fold is a phone's) */
+  .platecol__tools:not(:has(> .tool:not([hidden]):not(.fold))){display:none}
+  .sim{padding:8px 12px 10px}
+  #simHost .mm__screen > svg.mf__svg{max-height:calc(100dvh - 200px)}
+}
+.memv{gap:5px;padding:6px 10px}
+.memv__btn{font-size:12.5px;padding:4px 11px}
+.memv__key{font-size:12.5px;gap:3px 14px;margin-top:0}
+.memv__pill{font-size:12px;padding:2px 9px}
+.sim .anikey{font-size:12.5px;gap:3px 14px;margin-top:4px}
+/* a caption under the picture (the bench's) is one line; who drew it is one press away, under the i beside it (js/plate.js) */
+.said{display:flex;align-items:center;justify-content:center;gap:7px;padding:5px 14px 6px;line-height:1.35}
+.said__name{display:block;font-size:13px;min-width:0}
+.said__i{display:inline-grid;place-items:center;position:relative;flex:none;width:21px;height:21px;margin:0;padding:0;
+  border-radius:50%;border:1.5px solid var(--col-line);background:var(--col-card);color:var(--col-ink);
+  font:italic 700 12.5px/1 Georgia,'Times New Roman',serif;cursor:pointer}
+.said__i::before{content:"";position:absolute;inset:-8px}
+.said__i:hover,.said__i[aria-expanded="true"]{border-color:var(--accent);color:var(--accent)}
+.said__i:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.said__more{position:absolute;left:12px;right:12px;bottom:calc(100% + 6px);z-index:8;display:block;text-align:left;
+  padding:10px 14px 11px;border-radius:10px;background:var(--col-card);border:1px solid var(--col-line);
+  box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:12.5px;line-height:1.45;color:var(--col-ink)}
+.said__more[hidden]{display:none}
+.said__more .said__credit{display:block;font-size:12.5px;color:var(--col-ink);margin:0}
+.said__more .said__h{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--col-soft);margin-bottom:3px}
+.said__more .said__list{display:block;margin:0;max-width:none}
+.said__more .said__li{display:block;margin-top:2px}
+@media (max-width:540px){ .said__i{width:26px;height:26px} }
